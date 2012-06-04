@@ -2,14 +2,12 @@
 HEAT
 ====
 
-This is an OpenStack style project that provides a REST API to orchestrate
-multiple cloud applications implementing well-known standards such as AWS
-CloudFormation and TOSCA.
+This is a project for creating JEOS images for heat.
 
-Currently the developers are focusing on AWS CloudFormation but are watching
-the development of the TOSCA specification.
-
-Why heat? It makes the clouds rise and keeps them there.
+This project supports the following features:
+Creates TDL files for use with oz
+Creates compressed qcow2 files for use with libvirt/glance
+Registers image files with glance
 
 Getting Started
 -----------
@@ -21,16 +19,8 @@ If you'd like to run from the master branch, you can clone the git repo:
 Follow the steps:
 https://github.com/heat-api/heat/wiki/HeatGettingStarted
 
-References
-----------
-* http://docs.amazonwebservices.com/AWSCloudFormation/latest/APIReference/API_CreateStack.html
-* http://docs.amazonwebservices.com/AWSCloudFormation/latest/UserGuide/create-stack.html
-* http://docs.amazonwebservices.com/AWSCloudFormation/latest/UserGuide/aws-template-resource-type-ref.html
-* http://www.oasis-open.org/committees/tc_home.php?wg_abbrev=tosca
-
 Related projects
 ----------------
-* http://wiki.openstack.org/Donabe
-* http://wiki.openstack.org/DatabaseAsAService (could be used to provide AWS::RDS::DBInstance)
-* http://wiki.openstack.org/QueueService (could be used to provide AWS::SQS::Queue)
+* http://www.heat-api.org
+* http://wiki.openstack.org/Heat
 
