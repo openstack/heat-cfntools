@@ -27,6 +27,7 @@ import os
 import os.path
 import re
 import sys
+import textwrap
 import time
 
 
@@ -69,20 +70,23 @@ def command_all(options, arguments):
     if os.geteuid() != 0:
         logging.error("jeos-create must be run as root")
         sys.exit(1)
-    if len(arguments) < 3:
-        print '\n  Please provide the distro, arch, and instance type.'
-        print '  Usage:'
-        print '   heat jeos-create <distro> <arch> <instancetype>'
-        print '     instance type can be:'
-        print '     gold builds a base image where userdata is used to' \
-              ' initialize the instance'
-        print '     cfntools builds a base image where AWS CloudFormation' \
-              ' tools are present'
-        sys.exit(1)
 
-    distro = arguments.pop(0)
-    arch = arguments.pop(0)
-    instance_type = arguments.pop(0)
+    try:
+        (distro, arch, instance_type) = arguments
+    except ValueError:
+        msg = """
+        Please provide the distro, arch, and instance type.
+        Usage:
+         heat jeos-create <distro> <arch> <instancetype>
+           instance type can be:
+           gold builds a base image where userdata is used to
+             initialize the instance
+           cfntools builds a base image where AWS CloudFormation
+             tools are present
+        """
+        print textwrap.dedent(msg)
+        exit(1)
+
     images_dir = '/var/lib/libvirt/images'
 
     arches = ('x86_64', 'i386', 'amd64')
@@ -123,7 +127,7 @@ def command_all(options, arguments):
         sys.exit(1)
 
     tdl_file = '%s-%s-%s-jeos.tdl' % (distro, arch, instance_type)
-    tdl_path = os.path.join(jeos_path, tdl_file)
+    tdl_path = os.path.join(options.jeos_dir, tdl_file)
     if options.debug:
         print "Using tdl: %s" % tdl_path
 
@@ -134,7 +138,7 @@ def command_all(options, arguments):
         cfn_tools = ['cfn-init', 'cfn-hup', 'cfn-signal',
                     'cfn-get-metadata', 'cfn_helper.py', 'cfn-push-stats']
         for cfnname in cfn_tools:
-            f = open('%s/%s' % (cfntools_path, cfnname), 'r')
+            f = open('%s/%s' % (options.cfn_dir, cfnname), 'r')
             cfscript_e64 = base64.b64encode(f.read())
             f.close()
             cfnpath = "/template/files/file[@name='/opt/aws/bin/%s']" % cfnname
@@ -169,21 +173,22 @@ def command_all(options, arguments):
     }
     images = client.get_images(**parameters)
 
-    image_registered = False
-    for image in images:
-        if image['name'] == distro + '-' + arch + '-' + instance_type:
-            image_registered = True
+    try:
+        image = [i for i in images if i['name'] == image_name][0]
+    except IndexError:
+        image = None
+
 
     runoz = options.yes and 'y' or None
     if os.access(qcow2_filename, os.R_OK):
         while runoz not in ('y', 'n'):
-            runoz = raw_input('An existing JEOS was found on disk.' \
-                              ' Do you want to build a fresh JEOS?' \
+            runoz = raw_input('An existing JEOS was found on disk.'
+                              ' Do you want to build a fresh JEOS?'
                               ' (y/n) ').lower()
         if runoz == 'y':
             os.remove(qcow2_filename)
             os.remove(dsk_filename)
-            if image_registered:
+            if image:
                 client.delete_image(image['id'])
         elif runoz == 'n':
             answer = None
@@ -193,7 +198,7 @@ def command_all(options, arguments):
                 if answer == 'n':
                     logging.info('No action taken')
                     sys.exit(0)
-                elif answer == 'y' and image_registered:
+                elif answer == 'y' and image:
                     answer = None
                     while answer not in ('y', 'n'):
                         answer = raw_input('Do you want to delete the ' \
