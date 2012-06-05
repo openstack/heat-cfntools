@@ -34,21 +34,23 @@ from glance.common import exception
 from glance import client as glance_client
 
 
-# TODO(shadower): fix the cmdline options
 # TODO(shadower): split the options to TDL/image/glance
 # TODO(shadower): use Oz as a library, don't shell out
 # TODO(shadower): remove jeos-create from the old binary, lib
 # TODO(shadower): update the getting started guide
 # TODO(shadower): update the tests
 
-bin_path = os.path.abspath(sys.argv[0])
-topdir = os.path.normpath(os.path.join(bin_path, '..', '..'))
 
-jeos_path = os.path.join(topdir, 'jeos')
-cfntools_path = os.path.join(topdir, 'cfntools')
+def command_tdl(options, arguments):
+    pass
 
+def command_image(options, arguments):
+    pass
 
-def jeos_create(options, arguments):
+def command_register(options, arguments):
+    pass
+
+def command_all(options, arguments):
     '''
     Create a new JEOS (Just Enough Operating System) image.
 
@@ -267,6 +269,10 @@ def create_options(parser):
 
     :param parser: The option parser
     """
+    parser.add_option('-j', '--jeos-dir', default='jeos',
+                      help="Path to the JEOS templates directory")
+    parser.add_option('-c', '--cfn-dir', default='cfntools',
+                      help="Path to cfntools directory")
     parser.add_option('-v', '--verbose', default=False, action="store_true",
                       help="Print more verbose output")
     parser.add_option('-d', '--debug', default=False, action="store_true",
@@ -353,6 +359,12 @@ def parse_options(parser, cli_args):
         logging.basicConfig(format='%(levelname)s:%(message)s',\
             level=logging.WARNING)
 
+    bin_path = os.path.abspath(sys.argv[0])
+    topdir = os.path.normpath(os.path.join(bin_path, '..', '..'))
+
+    options.jeos_dir = os.path.join(topdir, options.jeos_dir)
+    options.cfn_dir = os.path.join(topdir, options.cfn_dir)
+
     return (options, command, args)
 
 
@@ -371,14 +383,13 @@ def print_help(options, args):
 
 
 def lookup_command(parser, command_name):
-    base_commands = {'help': print_help}
-
-    stack_commands = {
-                'jeos-create': jeos_create}
-
-    commands = {}
-    for command_set in (base_commands, stack_commands):
-        commands.update(command_set)
+    commands = {
+        'create': command_all,
+        'tdl': command_tdl,
+        'image': command_image,
+        'register': command_register,
+        'help': print_help,
+    }
 
     try:
         command = commands[command_name]
@@ -397,9 +408,15 @@ def main():
 
 Commands:
 
-    help <command>  Output help for one of the commands below
+    create     Create a JEOS image and register it with OpenStack
 
-    jeos-create     Create a JEOS image
+    tdl        Prepare a template ready for Oz
+
+    image      Build an image from the specified template
+
+    register   Register the built image with OpenStack Glance
+
+    help <command>  Output help for one of the commands below
 
 """
 
