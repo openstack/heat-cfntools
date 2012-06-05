@@ -1,12 +1,7 @@
-include AUTHORS
-include ChangeLog
-include HACKING.rst
 include LICENSE
 include README.rst
 include MANIFEST.in pylintrc
-include openstack-common.conf
 include babel.cfg
-graft templates
 include heat/jeos/F16-i386-gold-jeos.tdl
 include heat/jeos/F17-i386-gold-jeos.tdl
 include heat/jeos/F16-i386-cfntools-jeos.tdl
@@ -23,6 +18,3 @@ include heat/cfntools/cfn-get-metadata
 include heat/cfntools/cfn-push-stats
 include heat/cloudinit/config
 include heat/cloudinit/part-handler.py
-include heat/db/sqlalchemy/migrate_repo/migrate.cfg
-graft etc
-graft docs

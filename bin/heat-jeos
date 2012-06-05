@@ -34,6 +34,25 @@ import time
 from glance.common import exception
 from glance import client as glance_client
 
+possible_topdir = os.path.normpath(os.path.join(os.path.abspath(sys.argv[0]),
+                                   os.pardir,
+                                   os.pardir))
+
+jeos_path = ''
+cfntools_path = ''
+if os.path.exists(os.path.join(possible_topdir, 'heat_jeos', '__init__.py')):
+    sys.path.insert(0, possible_topdir)
+    jeos_path = '%s/heat/%s/' % (possible_topdir, "jeos")
+    cfntools_path = '%s/heat/%s/' % (possible_topdir, "cfntools")
+    jeos_path = os.path.join(possible_topdir, 'jeos')
+    cfntools_path = os.path.join(possible_topdir, 'cfntools')
+else:
+    for p in sys.path:
+        jeos_path = os.path.join(p, 'heat', 'jeos')
+        cfntools_path = os.path.join(p, 'heat', 'cfntools')
+        if os.access(jeos_path, os.R_OK):
+            break
+
 
 # TODO(shadower): split the options to TDL/image/glance
 # TODO(shadower): use Oz as a library, don't shell out
@@ -127,7 +146,7 @@ def command_all(options, arguments):
         sys.exit(1)
 
     tdl_file = '%s-%s-%s-jeos.tdl' % (distro, arch, instance_type)
-    tdl_path = os.path.join(options.jeos_dir, tdl_file)
+    tdl_path = os.path.join(jeos_path, tdl_file)
     if options.debug:
         print "Using tdl: %s" % tdl_path
 
@@ -138,7 +157,7 @@ def command_all(options, arguments):
         cfn_tools = ['cfn-init', 'cfn-hup', 'cfn-signal',
                     'cfn-get-metadata', 'cfn_helper.py', 'cfn-push-stats']
         for cfnname in cfn_tools:
-            f = open('%s/%s' % (options.cfn_dir, cfnname), 'r')
+            f = open('%s/%s' % (cfntools_path, cfnname), 'r')
             cfscript_e64 = base64.b64encode(f.read())
             f.close()
             cfnpath = "/template/files/file[@name='/opt/aws/bin/%s']" % cfnname
