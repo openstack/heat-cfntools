@@ -2,7 +2,7 @@
 *.swp
 build
 dist
-heat.egg-info
+heat_jeos.egg-info/
 heat/vcsversion.py
 tags
 *.log
