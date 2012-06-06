@@ -34,24 +34,16 @@ import time
 from glance.common import exception
 from glance import client as glance_client
 
+
 possible_topdir = os.path.normpath(os.path.join(os.path.abspath(sys.argv[0]),
                                    os.pardir,
                                    os.pardir))
 
-jeos_path = ''
-cfntools_path = ''
-if os.path.exists(os.path.join(possible_topdir, 'heat_jeos', '__init__.py')):
+if os.path.exists(os.path.join(possible_topdir, 'heat_jeos')):
     sys.path.insert(0, possible_topdir)
-    jeos_path = '%s/heat/%s/' % (possible_topdir, "jeos")
-    cfntools_path = '%s/heat/%s/' % (possible_topdir, "cfntools")
-    jeos_path = os.path.join(possible_topdir, 'jeos')
-    cfntools_path = os.path.join(possible_topdir, 'cfntools')
-else:
-    for p in sys.path:
-        jeos_path = os.path.join(p, 'heat', 'jeos')
-        cfntools_path = os.path.join(p, 'heat', 'cfntools')
-        if os.access(jeos_path, os.R_OK):
-            break
+
+import heat_jeos
+jeos_module_path = os.path.abspath(os.path.dirname(heat_jeos.__file__))
 
 
 # TODO(shadower): split the options to TDL/image/glance
@@ -146,7 +138,7 @@ def command_all(options, arguments):
         sys.exit(1)
 
     tdl_file = '%s-%s-%s-jeos.tdl' % (distro, arch, instance_type)
-    tdl_path = os.path.join(jeos_path, tdl_file)
+    tdl_path = os.path.join(options.jeos_dir, tdl_file)
     if options.debug:
         print "Using tdl: %s" % tdl_path
 
@@ -157,7 +149,7 @@ def command_all(options, arguments):
         cfn_tools = ['cfn-init', 'cfn-hup', 'cfn-signal',
                     'cfn-get-metadata', 'cfn_helper.py', 'cfn-push-stats']
         for cfnname in cfn_tools:
-            f = open('%s/%s' % (cfntools_path, cfnname), 'r')
+            f = open('%s/%s' % (options.cfn_dir, cfnname), 'r')
             cfscript_e64 = base64.b64encode(f.read())
             f.close()
             cfnpath = "/template/files/file[@name='/opt/aws/bin/%s']" % cfnname
@@ -293,9 +285,11 @@ def create_options(parser):
 
     :param parser: The option parser
     """
-    parser.add_option('-j', '--jeos-dir', default='jeos',
+    parser.add_option('-j', '--jeos-dir',
+                      default=os.path.join(jeos_module_path, 'jeos'),
                       help="Path to the JEOS templates directory")
-    parser.add_option('-c', '--cfn-dir', default='cfntools',
+    parser.add_option('-c', '--cfn-dir',
+                      default=os.path.join(jeos_module_path, 'cfntools'),
                       help="Path to cfntools directory")
     parser.add_option('-v', '--verbose', default=False, action="store_true",
                       help="Print more verbose output")
@@ -383,11 +377,8 @@ def parse_options(parser, cli_args):
         logging.basicConfig(format='%(levelname)s:%(message)s',\
             level=logging.WARNING)
 
-    bin_path = os.path.abspath(sys.argv[0])
-    topdir = os.path.normpath(os.path.join(bin_path, '..', '..'))
-
-    options.jeos_dir = os.path.join(topdir, options.jeos_dir)
-    options.cfn_dir = os.path.join(topdir, options.cfn_dir)
+    options.jeos_dir = os.path.join(os.getcwd(), options.jeos_dir)
+    options.cfn_dir = os.path.join(os.getcwd(), options.cfn_dir)
 
     return (options, command, args)
 
