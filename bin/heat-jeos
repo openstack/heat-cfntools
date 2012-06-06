@@ -44,9 +44,9 @@ if os.path.exists(os.path.join(possible_topdir, 'heat_jeos')):
 
 import heat_jeos
 jeos_module_path = os.path.abspath(os.path.dirname(heat_jeos.__file__))
+temporary_tdl_path = '/tmp/tdl'
 
 
-# TODO(shadower): split the options to TDL/image/glance
 # TODO(shadower): use Oz as a library, don't shell out
 # TODO(shadower): remove jeos-create from the old binary, lib
 # TODO(shadower): update the getting started guide
@@ -54,121 +54,41 @@ jeos_module_path = os.path.abspath(os.path.dirname(heat_jeos.__file__))
 
 
 def command_tdl(options, arguments):
-    pass
+    distro, arch, instance_type = extract_image_params(arguments)
+    create_tdl(distro, arch, instance_type, options.images_dir,
+                          options.jeos_dir, options.cfn_dir, options.debug)
 
 def command_image(options, arguments):
-    pass
-
-def command_register(options, arguments):
-    pass
-
-def command_all(options, arguments):
-    '''
-    Create a new JEOS (Just Enough Operating System) image.
-
-    Usage: heat jeos-create <distribution> <architecture> <image type>
-
-    Distribution: Distribution such as 'F16', 'F17', 'U10', 'D6'.
-    Architecture: Architecture such as 'i386' 'i686' or 'x86_64'.
-    Image Type: Image type such as 'gold' or 'cfntools'.
-                'gold' is a basic gold JEOS.
-                'cfntools' contains the cfntools helper scripts.
-
-    The command must be run as root in order for libvirt to have permissions
-    to create virtual machines and read the raw DVDs.
-    '''
     # if not running as root, return EPERM to command line
     if os.geteuid() != 0:
         logging.error("jeos-create must be run as root")
         sys.exit(1)
-
-    try:
-        (distro, arch, instance_type) = arguments
-    except ValueError:
-        msg = """
-        Please provide the distro, arch, and instance type.
-        Usage:
-         heat jeos-create <distro> <arch> <instancetype>
-           instance type can be:
-           gold builds a base image where userdata is used to
-             initialize the instance
-           cfntools builds a base image where AWS CloudFormation
-             tools are present
-        """
-        print textwrap.dedent(msg)
-        exit(1)
-
-    images_dir = '/var/lib/libvirt/images'
-
-    arches = ('x86_64', 'i386', 'amd64')
-    arches_str = " | ".join(arches)
-    instance_types = ('gold', 'cfntools')
-    instances_str = " | ".join(instance_types)
-
-    if not arch in arches:
-        logging.error('arch %s not supported' % arch)
-        logging.error('try: heat jeos-create %s [ %s ]' % (distro, arches_str))
-        sys.exit(1)
-
-    if not instance_type in instance_types:
-        logging.error('A JEOS instance type of %s not supported' %\
-            instance_type)
-        logging.error('try: heat jeos-create %s %s [ %s ]' %\
-            (distro, arch, instances_str))
-        sys.exit(1)
-
-    src_arch = 'i386'
-    fedora_match = re.match('F(1[6-7])', distro)
-    if fedora_match:
-        if arch == 'x86_64':
-            src_arch = 'x86_64'
-        version = fedora_match.group(1)
-        iso = '%s/Fedora-%s-%s-DVD.iso' % (images_dir, version, arch)
-    elif distro == 'U10':
-        if arch == 'amd64':
-            src_arch = 'x86_64'
-        iso = '%s/ubuntu-10.04.3-server-%s.iso' % (images_dir, arch)
-    else:
-        logging.error('distro %s not supported' % distro)
-        logging.error('try: F16, F17 or U10')
-        sys.exit(1)
-
-    if not os.access(iso, os.R_OK):
-        logging.error('*** %s does not exist.' % (iso))
-        sys.exit(1)
-
-    tdl_file = '%s-%s-%s-jeos.tdl' % (distro, arch, instance_type)
-    tdl_path = os.path.join(options.jeos_dir, tdl_file)
-    if options.debug:
-        print "Using tdl: %s" % tdl_path
-
-    # Load the cfntools into the cfntool image by encoding them in base64
-    # and injecting them into the TDL at the appropriate place
-    if instance_type == 'cfntools':
-        tdl_xml = etree.parse(tdl_path)
-        cfn_tools = ['cfn-init', 'cfn-hup', 'cfn-signal',
-                    'cfn-get-metadata', 'cfn_helper.py', 'cfn-push-stats']
-        for cfnname in cfn_tools:
-            f = open('%s/%s' % (options.cfn_dir, cfnname), 'r')
-            cfscript_e64 = base64.b64encode(f.read())
-            f.close()
-            cfnpath = "/template/files/file[@name='/opt/aws/bin/%s']" % cfnname
-            tdl_xml.xpath(cfnpath)[0].text = cfscript_e64
-
-        # TODO(sdake) INSECURE
-        tdl_xml.write('/tmp/tdl', xml_declaration=True)
-        tdl_path = '/tmp/tdl'
-
-    dsk_filename = '%s/%s-%s-%s-jeos.dsk' % (images_dir, distro,
-                                             src_arch, instance_type)
-    qcow2_filename = '%s/%s-%s-%s-jeos.qcow2' % (images_dir, distro,
-                                                 arch, instance_type)
-    image_name = '%s-%s-%s' % (distro, arch, instance_type)
-
-    if not os.access(tdl_path, os.R_OK):
+    if not os.access(temporary_tdl_path, os.R_OK):
         logging.error('The tdl for that disto/arch is not available')
         sys.exit(1)
 
+    distro, arch, instace_type = extract_image_params(arguments)
+    dsk_path, qcow2_path, image_name = extract_arguments(options, *arguments)
+
+    if os.access(qcow2_path, os.R_OK):
+        rebuild = options.yes or prompt_bool('An existing JEOS was found '
+                'on disk. Do you want to build a fresh JEOS? (y/n) ')
+        if not rebuild:
+            logging.info('No action taken')
+            return False
+
+    logging.info('Creating JEOS image (%s) - '
+                    'this takes approximately 10 minutes.' % image_name)
+    build_jeos(temporary_tdl_path, dsk_path, qcow2_path, options.debug)
+    return True
+
+
+def command_register(options, arguments):
+    distro, arch, image_name = extract_image_params(arguments)
+    dsk_path, qcow2_path, image_name = extract_arguments(options, *arguments)
+
+    logging.info('Registering JEOS image (%s) '
+                 'with OpenStack Glance.' % image_name)
     creds = dict(username=options.username,
                  password=options.password,
                  tenant=options.tenant,
@@ -189,73 +109,187 @@ def command_all(options, arguments):
     except IndexError:
         image = None
 
+    if image:
+        delete_image = options.yes or prompt_bool('Do you want to '
+                'delete the existing JEOS in glance? (y/n) ')
+        if delete_image:
+            client.delete_image(image['id'])
+        else:
+            logging.info('No action taken')
+            sys.exit(0)
 
-    runoz = options.yes and 'y' or None
-    if os.access(qcow2_filename, os.R_OK):
-        while runoz not in ('y', 'n'):
-            runoz = raw_input('An existing JEOS was found on disk.'
-                              ' Do you want to build a fresh JEOS?'
-                              ' (y/n) ').lower()
-        if runoz == 'y':
-            os.remove(qcow2_filename)
-            os.remove(dsk_filename)
-            if image:
-                client.delete_image(image['id'])
-        elif runoz == 'n':
-            answer = None
-            while answer not in ('y', 'n'):
-                answer = raw_input('Do you want to register your existing' \
-                                   ' JEOS file with glance? (y/n) ').lower()
-                if answer == 'n':
-                    logging.info('No action taken')
-                    sys.exit(0)
-                elif answer == 'y' and image:
-                    answer = None
-                    while answer not in ('y', 'n'):
-                        answer = raw_input('Do you want to delete the ' \
-                                           'existing JEOS in glance?' \
-                                           ' (y/n) ').lower()
-                    if answer == 'n':
-                        logging.info('No action taken')
-                        sys.exit(0)
-                    elif answer == 'y':
-                        client.delete_image(image['id'])
+    register_image(client, qcow2_path, image_name, options.username, image)
 
-    if runoz == None or runoz == 'y':
-        logging.info('Creating JEOS image (%s) - '\
-                     'this takes approximately 10 minutes.' % image_name)
-        extra_opts = ' '
-        if options.debug:
-            extra_opts = ' -d 3 '
+def command_all(options, arguments):
+    '''
+    Create a new JEOS (Just Enough Operating System) image.
 
-        ozcmd = "oz-install %s -t 50000 -u %s -x /dev/null" % (extra_opts,
-                                                               tdl_path)
-        logging.debug("Running : %s" % ozcmd)
-        res = os.system(ozcmd)
-        if res == 256:
-            sys.exit(1)
-        if not os.access(dsk_filename, os.R_OK):
-            logging.error('oz-install did not create the image,' \
-                          ' check your oz installation.')
-            sys.exit(1)
+    Usage: heat jeos-create <distribution> <architecture> <image type>
 
-        logging.info('Converting raw disk image to a qcow2 image.')
-        os.system("qemu-img convert -c -O qcow2 %s %s" % (dsk_filename,
-                                                       qcow2_filename))
+    Distribution: Distribution such as 'F16', 'F17', 'U10', 'D6'.
+    Architecture: Architecture such as 'i386' 'i686' or 'x86_64'.
+    Image Type: Image type such as 'gold' or 'cfntools'.
+                'gold' is a basic gold JEOS.
+                'cfntools' contains the cfntools helper scripts.
 
-    logging.info('Registering JEOS image (%s) ' \
-                 'with OpenStack Glance.' % image_name)
+    The command must be run as root in order for libvirt to have permissions
+    to create virtual machines and read the raw DVDs.
+    '''
+    command_tdl(options, arguments)
 
-    image_meta = {'name': image_name,
+    _, qcow2_path, _ = extract_arguments(options, *arguments)
+
+    built = command_image(options, arguments)
+    if built:
+        command_register(options, arguments)
+    elif os.access(qcow2_path, os.R_OK):
+        register = options.yes or prompt_bool('Do you want to '
+                'register your existing JEOS file with glance? (y/n) ')
+
+        if register:
+            command_register(options, arguments)
+        else:
+            logging.info('No action taken')
+            sys.exit(0)
+
+
+def extract_image_params(arguments):
+    try:
+        distro, arch, instance_type = arguments
+        return distro, arch, instance_type
+    except ValueError:
+        msg = """
+        Please provide the distro, arch, and instance type.
+        Usage:
+         heat jeos-create <distro> <arch> <instancetype>
+           instance type can be:
+           gold builds a base image where userdata is used to
+             initialize the instance
+           cfntools builds a base image where AWS CloudFormation
+             tools are present
+        """
+        print textwrap.dedent(msg)
+        exit(1)
+
+def extract_arguments(options, distro, arch, instance_type):
+    arches = ('x86_64', 'i386', 'amd64')
+    arches_str = " | ".join(arches)
+    instance_types = ('gold', 'cfntools')
+    instances_str = " | ".join(instance_types)
+
+    if not arch in arches:
+        logging.error('arch %s not supported' % arch)
+        logging.error('try: heat jeos-create %s [ %s ]' % (distro, arches_str))
+        sys.exit(1)
+
+    if not instance_type in instance_types:
+        logging.error('A JEOS instance type of %s not supported' %
+            instance_type)
+        logging.error('try: heat jeos-create %s %s [ %s ]' %
+            (distro, arch, instances_str))
+        sys.exit(1)
+
+    src_arch = 'i386'
+    fedora_match = re.match('F(1[6-7])', distro)
+    if fedora_match:
+        if arch == 'x86_64':
+            src_arch = 'x86_64'
+        version = fedora_match.group(1)
+        iso = '%s/Fedora-%s-%s-DVD.iso' % (options.images_dir, version, arch)
+    elif distro == 'U10':
+        if arch == 'amd64':
+            src_arch = 'x86_64'
+        iso = '%s/ubuntu-10.04.3-server-%s.iso' % (options.images_dir, arch)
+    else:
+        logging.error('distro %s not supported' % distro)
+        logging.error('try: F16, F17 or U10')
+        sys.exit(1)
+
+    if not os.access(iso, os.R_OK):
+        logging.error('*** %s does not exist.' % (iso))
+        sys.exit(1)
+
+    dsk_filename = '%s/%s-%s-%s-jeos.dsk' % (options.images_dir, distro,
+                                             src_arch, instance_type)
+    qcow2_filename = '%s/%s-%s-%s-jeos.qcow2' % (options.images_dir, distro,
+                                                 arch, instance_type)
+    image_name = '%s-%s-%s' % (distro, arch, instance_type)
+
+    return dsk_filename, qcow2_filename, image_name
+
+
+
+def prompt_bool(question):
+    while True:
+        answer = raw_input(question).lower()
+        if answer in ('y', 'yes'):
+            return True
+        if answer in ('n', 'no'):
+            return False
+
+def create_tdl(distro, arch, instance_type, images_dir, jeos_dir, cfn_dir,
+        debug):
+    tdl_file = '%s-%s-%s-jeos.tdl' % (distro, arch, instance_type)
+    tdl_path = os.path.join(jeos_dir, tdl_file)
+    if debug:
+        print "Using tdl: %s" % tdl_path
+
+    # Load the cfntools into the cfntool image by encoding them in base64
+    # and injecting them into the TDL at the appropriate place
+    if instance_type == 'cfntools':
+        tdl_xml = etree.parse(tdl_path)
+        cfn_tools = ['cfn-init', 'cfn-hup', 'cfn-signal',
+                    'cfn-get-metadata', 'cfn_helper.py', 'cfn-push-stats']
+        for cfnname in cfn_tools:
+            f = open('%s/%s' % (cfn_dir, cfnname), 'r')
+            cfscript_e64 = base64.b64encode(f.read())
+            f.close()
+            cfnpath = "/template/files/file[@name='/opt/aws/bin/%s']" % cfnname
+            tdl_xml.xpath(cfnpath)[0].text = cfscript_e64
+
+        # TODO(sdake) INSECURE
+        tdl_xml.write(temporary_tdl_path, xml_declaration=True)
+
+
+def build_jeos(tdl_path, dsk_path, qcow2_path, debug):
+    if os.path.exists(qcow2_path):
+        os.remove(qcow2_path)
+    if os.path.exists(dsk_path):
+        os.remove(dsk_path)
+
+    extra_opts = ' '
+    if debug:
+        extra_opts = ' -d 3 '
+
+    ozcmd = "oz-install %s -t 50000 -u %s -x /dev/null" % (extra_opts,
+                                                            tdl_path)
+    logging.debug("Running : %s" % ozcmd)
+    res = os.system(ozcmd)
+    if res == 256:
+        sys.exit(1)
+    if not os.access(dsk_path, os.R_OK):
+        logging.error('oz-install did not create the image,'
+                      ' check your oz installation.')
+        sys.exit(1)
+
+    logging.info('Converting raw disk image to a qcow2 image.')
+    os.system("qemu-img convert -c -O qcow2 %s %s" % (dsk_path, qcow2_path))
+
+
+def register_image(client, qcow2_path, name, owner, existing_image):
+    image_meta = {'name': name,
                   'is_public': True,
                   'disk_format': 'qcow2',
                   'min_disk': 0,
                   'min_ram': 0,
-                  'owner': options.username,
+                  'owner': owner,
                   'container_format': 'bare'}
 
     try:
-        with open(qcow2_filename) as ifile:
+        if existing_image:
+            client.delete_image(existing_image['id'])
+
+        with open(qcow2_path) as ifile:
             image_meta = client.add_image(image_meta, ifile)
         image_id = image_meta['id']
         logging.debug(" Added new image with ID: %s" % image_id)
@@ -278,6 +312,7 @@ def command_all(options, arguments):
                "registry, but the image's status will likely be 'killed'.")
 
 
+
 def create_options(parser):
     """
     Sets up the CLI and config-file options that may be
@@ -291,6 +326,9 @@ def create_options(parser):
     parser.add_option('-c', '--cfn-dir',
                       default=os.path.join(jeos_module_path, 'cfntools'),
                       help="Path to cfntools directory")
+    parser.add_option('-i', '--images-dir',
+                      default='/var/lib/libvirt/images',
+                      help="Path to the base OS images directory")
     parser.add_option('-v', '--verbose', default=False, action="store_true",
                       help="Print more verbose output")
     parser.add_option('-d', '--debug', default=False, action="store_true",
