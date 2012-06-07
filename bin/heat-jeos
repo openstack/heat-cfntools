@@ -124,7 +124,7 @@ def command_all(options, arguments):
     '''
     Create a new JEOS (Just Enough Operating System) image.
 
-    Usage: heat jeos-create <distribution> <architecture> <image type>
+    Usage: heat-jeos create <distribution> <architecture> <image type>
 
     Distribution: Distribution such as 'F16', 'F17', 'U10', 'D6'.
     Architecture: Architecture such as 'i386' 'i686' or 'x86_64'.
