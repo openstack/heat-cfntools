@@ -20,6 +20,7 @@ Tools to generate JEOS TDLs, build the images and register them in Glance.
 import base64
 import ConfigParser
 import gettext
+import inspect
 import json
 import logging
 from lxml import etree
@@ -47,25 +48,45 @@ if os.path.exists(os.path.join(possible_topdir, 'heat_jeos')):
 
 import heat_jeos
 jeos_module_path = os.path.abspath(os.path.dirname(heat_jeos.__file__))
-temporary_tdl_path = '/tmp/tdl'
 
 
 def command_tdl(options, arguments):
-    distro, arch, instance_type = extract_image_params(arguments)
+    '''
+    Create a new TDL.
+
+    Usage:
+    heat-jeos tdl <distribution> <architecture> <image type> <output tdl>
+    '''
+    try:
+        distro, arch, instance_type, output_tdl = arguments
+    except ValueError:
+        print inspect.getdoc(command_tdl)
+        sys.exit(1)
     create_tdl(distro, arch, instance_type, options.images_dir,
-                          options.jeos_dir, options.cfn_dir)
+               options.jeos_dir, options.cfn_dir, output_tdl)
 
 def command_image(options, arguments):
-    # if not running as root, return EPERM to command line
+    '''
+    Create a new JEOS image.
+
+    Usage:
+    heat-jeos image <distribution> <architecture> <image type> <tdl>
+    '''
     if os.geteuid() != 0:
-        logging.error("jeos-create must be run as root")
+        logging.error("This command must be run as root")
         sys.exit(1)
-    if not os.access(temporary_tdl_path, os.R_OK):
+    try:
+        distro, arch, instance_type, input_tdl = arguments
+    except ValueError:
+        print inspect.getdoc(command_image)
+        sys.exit(1)
+
+    if not os.access(input_tdl, os.R_OK):
         logging.error('The tdl for that disto/arch is not available')
         sys.exit(1)
 
-    distro, arch, instace_type = extract_image_params(arguments)
-    dsk_path, qcow2_path, image_name = extract_arguments(options, *arguments)
+    dsk_path, qcow2_path, image_name = target_image_paths(options,
+            distro, arch, instance_type)
 
     if os.access(qcow2_path, os.R_OK):
         rebuild = options.yes or prompt_bool('An existing JEOS was found '
@@ -75,14 +96,26 @@ def command_image(options, arguments):
             return False
 
     logging.info('Creating JEOS image (%s) - '
-                    'this takes approximately 10 minutes.' % image_name)
-    build_jeos(temporary_tdl_path, dsk_path, qcow2_path)
+                 'this takes approximately 10 minutes.' % image_name)
+    build_jeos(input_tdl, dsk_path, qcow2_path)
     return True
 
 
 def command_register(options, arguments):
-    distro, arch, image_name = extract_image_params(arguments)
-    dsk_path, qcow2_path, image_name = extract_arguments(options, *arguments)
+    '''
+    Register the previously generated image with Glance.
+
+    Usage:
+    heat-jeos register <distribution> <architecture> <image type>
+    '''
+    try:
+        distro, arch, instance_type = arguments
+    except ValueError:
+        print inspect.getdoc(command_register)
+        sys.exit(1)
+
+    dsk_path, qcow2_path, image_name = target_image_paths(options,
+            distro, arch, instance_type)
 
     logging.info('Registering JEOS image (%s) '
                  'with OpenStack Glance.' % image_name)
@@ -119,9 +152,10 @@ def command_register(options, arguments):
 
 def command_all(options, arguments):
     '''
-    Create a new JEOS (Just Enough Operating System) image.
+    Create a new JEOS (Just Enough Operating System) image and register it.
 
-    Usage: heat-jeos create <distribution> <architecture> <image type>
+    Usage:
+    heat-jeos create <distribution> <architecture> <image type>
 
     Distribution: Distribution such as 'F16', 'F17', 'U10', 'D6'.
     Architecture: Architecture such as 'i386' 'i686' or 'x86_64'.
@@ -132,13 +166,25 @@ def command_all(options, arguments):
     The command must be run as root in order for libvirt to have permissions
     to create virtual machines and read the raw DVDs.
     '''
-    command_tdl(options, arguments)
+    if os.geteuid() != 0:
+        logging.error("This command must be run as root")
+        sys.exit(1)
+    try:
+        distro, arch, instance_type = arguments
+    except ValueError:
+        print inspect.getdoc(command_all)
+        sys.exit(1)
 
-    _, qcow2_path, _ = extract_arguments(options, *arguments)
+    temporary_tdl_path = '/tmp/tdl'
+    command_tdl(options, [distro, arch, instance_type, temporary_tdl_path])
 
-    built = command_image(options, arguments)
+    dsk_path, qcow2_path, image_name = target_image_paths(options,
+            distro, arch, instance_type)
+
+    built = command_image(options,
+                          [distro, arch, instance_type, temporary_tdl_path])
     if built:
-        command_register(options, arguments)
+        command_register(options, [distro, arch, instance_type])
     elif os.access(qcow2_path, os.R_OK):
         register = options.yes or prompt_bool('Do you want to '
                 'register your existing JEOS file with glance? (y/n) ')
@@ -150,25 +196,7 @@ def command_all(options, arguments):
             sys.exit(0)
 
 
-def extract_image_params(arguments):
-    try:
-        distro, arch, instance_type = arguments
-        return distro, arch, instance_type
-    except ValueError:
-        msg = """
-        Please provide the distro, arch, and instance type.
-        Usage:
-         heat jeos-create <distro> <arch> <instancetype>
-           instance type can be:
-           gold builds a base image where userdata is used to
-             initialize the instance
-           cfntools builds a base image where AWS CloudFormation
-             tools are present
-        """
-        print textwrap.dedent(msg)
-        exit(1)
-
-def extract_arguments(options, distro, arch, instance_type):
+def target_image_paths(options, distro, arch, instance_type):
     arches = ('x86_64', 'i386', 'amd64')
     arches_str = " | ".join(arches)
     instance_types = ('gold', 'cfntools')
@@ -224,7 +252,8 @@ def prompt_bool(question):
         if answer in ('n', 'no'):
             return False
 
-def create_tdl(distro, arch, instance_type, images_dir, jeos_dir, cfn_dir):
+def create_tdl(distro, arch, instance_type, images_dir, jeos_dir, cfn_dir,
+               output_tdl_path):
     tdl_file = '%s-%s-%s-jeos.tdl' % (distro, arch, instance_type)
     tdl_path = os.path.join(jeos_dir, tdl_file)
     logging.debug("Using tdl: %s" % tdl_path)
@@ -243,7 +272,7 @@ def create_tdl(distro, arch, instance_type, images_dir, jeos_dir, cfn_dir):
             tdl_xml.xpath(cfnpath)[0].text = cfscript_e64
 
         # TODO(sdake) INSECURE
-        tdl_xml.write(temporary_tdl_path, xml_declaration=True)
+        tdl_xml.write(output_tdl_path, xml_declaration=True)
 
 
 def build_jeos(tdl_path, dsk_path, qcow2_path):
