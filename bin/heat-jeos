@@ -18,6 +18,7 @@ Tools to generate JEOS TDLs, build the images and register them in Glance.
 """
 
 import base64
+import ConfigParser
 import gettext
 import json
 import logging
@@ -33,6 +34,8 @@ import time
 
 from glance.common import exception
 from glance import client as glance_client
+import oz.TDL
+import oz.GuestFactory
 
 
 possible_topdir = os.path.normpath(os.path.join(os.path.abspath(sys.argv[0]),
@@ -47,16 +50,10 @@ jeos_module_path = os.path.abspath(os.path.dirname(heat_jeos.__file__))
 temporary_tdl_path = '/tmp/tdl'
 
 
-# TODO(shadower): use Oz as a library, don't shell out
-# TODO(shadower): remove jeos-create from the old binary, lib
-# TODO(shadower): update the getting started guide
-# TODO(shadower): update the tests
-
-
 def command_tdl(options, arguments):
     distro, arch, instance_type = extract_image_params(arguments)
     create_tdl(distro, arch, instance_type, options.images_dir,
-                          options.jeos_dir, options.cfn_dir, options.debug)
+                          options.jeos_dir, options.cfn_dir)
 
 def command_image(options, arguments):
     # if not running as root, return EPERM to command line
@@ -79,7 +76,7 @@ def command_image(options, arguments):
 
     logging.info('Creating JEOS image (%s) - '
                     'this takes approximately 10 minutes.' % image_name)
-    build_jeos(temporary_tdl_path, dsk_path, qcow2_path, options.debug)
+    build_jeos(temporary_tdl_path, dsk_path, qcow2_path)
     return True
 
 
@@ -227,12 +224,10 @@ def prompt_bool(question):
         if answer in ('n', 'no'):
             return False
 
-def create_tdl(distro, arch, instance_type, images_dir, jeos_dir, cfn_dir,
-        debug):
+def create_tdl(distro, arch, instance_type, images_dir, jeos_dir, cfn_dir):
     tdl_file = '%s-%s-%s-jeos.tdl' % (distro, arch, instance_type)
     tdl_path = os.path.join(jeos_dir, tdl_file)
-    if debug:
-        print "Using tdl: %s" % tdl_path
+    logging.debug("Using tdl: %s" % tdl_path)
 
     # Load the cfntools into the cfntool image by encoding them in base64
     # and injecting them into the TDL at the appropriate place
@@ -251,22 +246,36 @@ def create_tdl(distro, arch, instance_type, images_dir, jeos_dir, cfn_dir,
         tdl_xml.write(temporary_tdl_path, xml_declaration=True)
 
 
-def build_jeos(tdl_path, dsk_path, qcow2_path, debug):
+def build_jeos(tdl_path, dsk_path, qcow2_path):
     if os.path.exists(qcow2_path):
         os.remove(qcow2_path)
     if os.path.exists(dsk_path):
         os.remove(dsk_path)
 
-    extra_opts = ' '
-    if debug:
-        extra_opts = ' -d 3 '
+    logging.debug("Running Oz")
+    tdl = oz.TDL.TDL(open(tdl_path, 'r').read())
+    config_file = "/etc/oz/oz.cfg"
+    config = ConfigParser.SafeConfigParser()
+    if os.access(config_file, os.F_OK):
+        config.read(config_file)
 
-    ozcmd = "oz-install %s -t 50000 -u %s -x /dev/null" % (extra_opts,
-                                                            tdl_path)
-    logging.debug("Running : %s" % ozcmd)
-    res = os.system(ozcmd)
-    if res == 256:
-        sys.exit(1)
+    guest = oz.GuestFactory.guest_factory(tdl, config, None, None)
+    guest.check_for_guest_conflict()
+
+    force_download = False
+    try:
+        guest.generate_install_media(force_download)
+        try:
+            guest.generate_diskimage(force=force_download)
+            libvirt_xml = guest.install(50000, force_download)
+        except:
+            guest.cleanup_old_guest()
+            raise
+    finally:
+        guest.cleanup_install()
+
+    guest.customize(libvirt_xml)
+
     if not os.access(dsk_path, os.R_OK):
         logging.error('oz-install did not create the image,'
                       ' check your oz installation.')
