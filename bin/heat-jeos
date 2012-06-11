@@ -117,22 +117,50 @@ def command_register(options, arguments):
     dsk_path, qcow2_path, image_name = target_image_paths(options,
             distro, arch, instance_type)
 
-    logging.info('Registering JEOS image (%s) '
-                 'with OpenStack Glance.' % image_name)
+    logging.info('Registering JEOS image (%s) with OpenStack Glance.' %
+                 image_name)
     creds = dict(username=options.username,
                  password=options.password,
                  tenant=options.tenant,
                  auth_url=options.auth_url,
                  strategy=options.auth_strategy)
 
-    client = glance_client.Client(host="0.0.0.0", port=9292,
-            use_ssl=False, auth_tok=None, creds=creds)
+    # When neither host nor port are specified and we're using Keystone auth,
+    # let it tell us the Glance entrypoint
+    configure_via_auth = (options.auth_strategy == 'keystone' and
+                          not (options.glance_host or options.glance_port))
+
+    # NOTE: these are ignored by the client when `configure_via_auth` is True
+    glance_host = options.glance_host if options.glance_host else '0.0.0.0'
+    try:
+        glance_port = int(options.glance_port) if options.glance_port else 9292
+    except:
+        logging.error('Port must be a number.')
+        sys.exit(1)
+
+    if configure_via_auth:
+        logging.debug('Using Glance entry point received by Keystone.')
+    else:
+        logging.debug('Connecting to Glance at host: %s, port: %d' %
+                      (glance_host, glance_port))
+
+    client = glance_client.Client(host=glance_host,
+                                  port=glance_port,
+                                  use_ssl=False,
+                                  auth_tok=None,
+                                  configure_via_auth=configure_via_auth,
+                                  creds=creds)
 
     parameters = {
         "filters": {},
         "limit": 10,
     }
-    images = client.get_images(**parameters)
+
+    try:
+        images = client.get_images(**parameters)
+    except exception.ClientConnectionError, e:
+        logging.error('Failed to connect to the Glance API server.')
+        sys.exit(1)
 
     try:
         image = [i for i in images if i['name'] == image_name][0]
@@ -374,6 +402,12 @@ def create_options(parser):
     parser.add_option('-y', '--yes', default=False, action="store_true",
                       help="Don't prompt for user input; assume the answer to "
                            "every question is 'yes'.")
+    parser.add_option('-H', '--glance-host',
+                      default=None,
+                      help="Glance hostname")
+    parser.add_option('-P', '--glance-port',
+                      default=None,
+                      help="Glance port number")
     parser.add_option('-A', '--auth_token', dest="auth_token",
                       metavar="TOKEN", default=None,
                       help="Authentication token to use to identify the "
