@@ -161,7 +161,7 @@ if not server_url:
     exit(1)
 url = '%sstats/%s/data/' % (server_url, args.watch)
 
-cmd_str = "curl -X POST -H \'Content-Type:\' --data-binary \'%s\' %s" % \
+cmd_str = "curl -X PUT -H \'Content-Type:\' --data-binary \'%s\' %s" % \
            (json.dumps(data), url)
 
 cmd = CommandRunner(cmd_str)
