@@ -185,8 +185,8 @@ def command_all(options, arguments):
     Usage:
     heat-jeos create <distribution> <architecture> <image type>
 
-    Distribution: Distribution such as 'F16', 'F17', 'U10', 'D6'.
-    Architecture: Architecture such as 'i386' 'i686' or 'x86_64'.
+    Distribution: Distribution such as 'F16', 'F17', 'U10', 'U12', 'D6'.
+    Architecture: Architecture such as 'i386', 'i686', 'x86_64', 'amd64'.
     Image Type: Image type such as 'gold' or 'cfntools'.
                 'gold' is a basic gold JEOS.
                 'cfntools' contains the cfntools helper scripts.
@@ -242,20 +242,25 @@ def target_image_paths(options, distro, arch, instance_type):
             (distro, arch, instances_str))
         sys.exit(1)
 
-    src_arch = 'i386'
+
+    if arch == 'x86_64' or arch == 'amd64':
+        src_arch = 'x86_64'
+    else:
+        src_arch = 'i386'
+
     fedora_match = re.match('F(1[6-7])', distro)
     if fedora_match:
-        if arch == 'x86_64':
-            src_arch = 'x86_64'
         version = fedora_match.group(1)
         iso = '%s/Fedora-%s-%s-DVD.iso' % (options.images_dir, version, arch)
     elif distro == 'U10':
-        if arch == 'amd64':
-            src_arch = 'x86_64'
-        iso = '%s/ubuntu-10.04.3-server-%s.iso' % (options.images_dir, arch)
+        iso = '%s/ubuntu-10.04.4-server-%s.iso' % (options.images_dir, arch)
+    elif distro == 'U12':
+        logging.error('distro not fully supported yet')
+        sys.exit(1)
+        iso = '%s/ubuntu-12.04-server-%s.iso' % (options.images_dir, arch)
     else:
         logging.error('distro %s not supported' % distro)
-        logging.error('try: F16, F17 or U10')
+        logging.error('try: F16, F17, U10, or U12')
         sys.exit(1)
 
     if not os.access(iso, os.R_OK):
@@ -560,7 +565,7 @@ Commands:
     except (RuntimeError,
             NotImplementedError), ex:
         oparser.print_usage()
-        logging.error("ERROR: " % ex)
+        logging.error("ERROR: %s" % ex)
         sys.exit(1)
 
 
