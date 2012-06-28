@@ -293,8 +293,8 @@ def create_tdl(distro, arch, instance_type, images_dir, jeos_dir, cfn_dir,
 
     # Load the cfntools into the cfntool image by encoding them in base64
     # and injecting them into the TDL at the appropriate place
+    tdl_xml = etree.parse(tdl_path)
     if instance_type == 'cfntools':
-        tdl_xml = etree.parse(tdl_path)
         cfn_tools = ['cfn-init', 'cfn-hup', 'cfn-signal',
                     'cfn-get-metadata', 'cfn_helper.py', 'cfn-push-stats']
         for cfnname in cfn_tools:
@@ -305,7 +305,7 @@ def create_tdl(distro, arch, instance_type, images_dir, jeos_dir, cfn_dir,
             tdl_xml.xpath(cfnpath)[0].text = cfscript_e64
 
         # TODO(sdake) INSECURE
-        tdl_xml.write(output_tdl_path, xml_declaration=True)
+    tdl_xml.write(output_tdl_path, xml_declaration=True)
 
 
 def build_jeos(tdl_path, dsk_path, qcow2_path):
