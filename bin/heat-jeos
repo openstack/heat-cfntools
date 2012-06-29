@@ -20,6 +20,7 @@ Tools to generate JEOS TDLs, build the images and register them in Glance.
 import base64
 import ConfigParser
 import gettext
+from glob import glob
 import inspect
 import json
 import logging
@@ -31,12 +32,14 @@ import re
 import sys
 import textwrap
 import time
+import traceback
 
 
 from glance.common import exception
 from glance import client as glance_client
 import oz.TDL
 import oz.GuestFactory
+from prettytable import PrettyTable
 
 
 possible_topdir = os.path.normpath(os.path.join(os.path.abspath(sys.argv[0]),
@@ -50,75 +53,121 @@ import heat_jeos
 jeos_module_path = os.path.abspath(os.path.dirname(heat_jeos.__file__))
 
 
-def command_tdl(options, arguments):
-    '''
-    Create a new TDL.
+def command_list(options, arguments):
+    """
+    List all available templates.
+    """
+    templates = sorted(glob('%s/*.tdl' % options.jeos_dir))
+    table = PrettyTable(['Name', 'OS', 'Version', 'Architecture'])
+    table.set_field_align('Name', 'l')
+    for template_path in templates:
+        table.add_row(template_metadata(template_path))
+    print table
+
+
+register_with_glance_message = """
+Now register with Glance using:
+
+glance add name=%s is_public=true disk_format=qcow2 container_format=ovf < %s
+"""
+
+
+def command_create(options, arguments):
+    """
+    Create a new JEOS (Just Enough Operating System) image and (optionally)
+    register it.
 
     Usage:
-    heat-jeos tdl <distribution> <architecture> <image type> <output tdl>
-    '''
-    try:
-        distro, arch, instance_type, output_tdl = arguments
-    except ValueError:
-        print inspect.getdoc(command_tdl)
+    heat-jeos create (<name> | --template-file=FILE) <options>
+
+    Arguments:
+    name                    Template name from `heat-jeos list`
+    --template-file=FILE    Path to the template file to use
+    --gold                  Build a basic gold JEOS (without cfntools)
+    --register-with-glance  Register the image with Glance after it's built
+    --iso                   Path to the ISO file to use as the base OS image
+
+    The command must be run as root in order for libvirt to have permissions
+    to create virtual machines and read the raw DVDs.
+
+    The image ISO must be specified in the Template file under the
+    `/template/os/install/iso` section or passed using the `--iso` argument.
+    """
+    if len(arguments) == 0:
+        tdl_path = options.template_file
+    elif len(arguments) == 1:
+        tdl_path = find_template_by_name(options.jeos_dir, arguments[0])
+
+    if not tdl_path:
+        print 'You must specify a correct template name or path.'
         sys.exit(1)
-    create_tdl(distro, arch, instance_type, options.images_dir,
-               options.jeos_dir, options.cfn_dir, output_tdl)
 
-def command_image(options, arguments):
-    '''
-    Create a new JEOS image.
-
-    Usage:
-    heat-jeos image <distribution> <architecture> <image type> <tdl>
-    '''
     if os.geteuid() != 0:
         logging.error("This command must be run as root")
         sys.exit(1)
-    try:
-        distro, arch, instance_type, input_tdl = arguments
-    except ValueError:
-        print inspect.getdoc(command_image)
-        sys.exit(1)
 
-    if not os.access(input_tdl, os.R_OK):
-        logging.error('The tdl for that disto/arch is not available')
-        sys.exit(1)
+    instance_type = 'gold' if options.gold else 'cfntools'
 
-    dsk_path, qcow2_path, image_name = target_image_paths(options,
-            distro, arch, instance_type)
+    oz_guest = get_oz_guest(tdl_path)
+    dsk_path, qcow2_path, image_name = target_image_paths(oz_guest)
 
+    should_build_jeos = True
     if os.access(qcow2_path, os.R_OK):
-        rebuild = options.yes or prompt_bool('An existing JEOS was found '
-                'on disk. Do you want to build a fresh JEOS? (y/n) ')
-        if not rebuild:
-            logging.info('No action taken')
-            return False
+        should_build_jeos = options.yes or prompt_bool('An existing JEOS was '
+            'found on disk. Do you want to build a fresh JEOS? (y/n) ')
 
-    logging.info('Creating JEOS image (%s) - '
-                 'this takes approximately 10 minutes.' % image_name)
-    build_jeos(input_tdl, dsk_path, qcow2_path)
-    return True
+    if should_build_jeos:
+        final_tdl = '/tmp/tdl'
+        create_tdl(tdl_path, instance_type, options.iso, options.cfn_dir,
+                   final_tdl)
 
+        logging.info('Creating JEOS image (%s) - '
+                     'this takes approximately 10 minutes.' % image_name)
+        build_jeos(oz_guest)
+        print('\nGenerated image: %s' % qcow2_path)
 
-def command_register(options, arguments):
-    '''
-    Register the previously generated image with Glance.
+        if not options.register_with_glance:
+            print(register_with_glance_message % (image_name, qcow2_path))
+            return
 
-    Usage:
-    heat-jeos register <distribution> <architecture> <image type>
-    '''
-    try:
-        distro, arch, instance_type = arguments
-    except ValueError:
-        print inspect.getdoc(command_register)
-        sys.exit(1)
-
-    dsk_path, qcow2_path, image_name = target_image_paths(options,
-            distro, arch, instance_type)
+    if not options.register_with_glance:
+        return
 
     logging.info('Registering JEOS image (%s) with OpenStack Glance.' %
                  image_name)
+    if not os.access(qcow2_path, os.R_OK):
+        logging.error('Cannot find image %s.' % qcow2_path)
+        sys.exit(1)
+
+    try:
+        client = get_glance_client(options)
+        image = find_image(client, image_name)
+        if image:
+            delete_image = options.yes or prompt_bool('Do you want to '
+                    'delete the existing JEOS in glance? (y/n) ')
+            if delete_image:
+                client.delete_image(image['id'])
+            else:
+                logging.info('No action taken')
+                sys.exit(0)
+        image_id = register_image(client, qcow2_path, image_name,
+                                  options.username, image)
+        print('\nImage %s was registered with ID %s' % (image_name, image_id))
+    except exception.ClientConnectionError, e:
+        logging.error('Failed to connect to the Glance API server.')
+        sys.exit(1)
+    except Exception, e:
+        logging.error(" Failed to add image. Got error:")
+        traceback.print_tb()
+        logging.warning("Note: Your image metadata may still be in the "
+               "registry, but the image's status will likely be 'killed'.")
+        sys.exit(1)
+
+
+def get_glance_client(options):
+    """
+    Returns a new Glance client connection based on the passed options.
+    """
     creds = dict(username=options.username,
                  password=options.password,
                  tenant=options.tenant,
@@ -150,134 +199,58 @@ def command_register(options, arguments):
                                   auth_tok=None,
                                   configure_via_auth=configure_via_auth,
                                   creds=creds)
+    return client
 
+
+def find_image(client, image_name):
+    """
+    Looks up the image of a given name in Glance.
+
+    Returns the image metadata or None if no image is found.
+    """
     parameters = {
         "filters": {},
         "limit": 10,
     }
 
-    try:
-        images = client.get_images(**parameters)
-    except exception.ClientConnectionError, e:
-        logging.error('Failed to connect to the Glance API server.')
-        sys.exit(1)
+    images = client.get_images(**parameters)
 
     try:
         image = [i for i in images if i['name'] == image_name][0]
     except IndexError:
         image = None
-
-    if image:
-        delete_image = options.yes or prompt_bool('Do you want to '
-                'delete the existing JEOS in glance? (y/n) ')
-        if delete_image:
-            client.delete_image(image['id'])
-        else:
-            logging.info('No action taken')
-            sys.exit(0)
-
-    register_image(client, qcow2_path, image_name, options.username, image)
-
-def command_all(options, arguments):
-    '''
-    Create a new JEOS (Just Enough Operating System) image and register it.
-
-    Usage:
-    heat-jeos create <distribution> <architecture> <image type>
-
-    Distribution: Distribution such as 'F16', 'F17', 'U10', 'U12', 'D6'.
-    Architecture: Architecture such as 'i386', 'i686', 'x86_64', 'amd64'.
-    Image Type: Image type such as 'gold' or 'cfntools'.
-                'gold' is a basic gold JEOS.
-                'cfntools' contains the cfntools helper scripts.
-
-    The command must be run as root in order for libvirt to have permissions
-    to create virtual machines and read the raw DVDs.
-    '''
-    if os.geteuid() != 0:
-        logging.error("This command must be run as root")
-        sys.exit(1)
-    try:
-        distro, arch, instance_type = arguments
-    except ValueError:
-        print inspect.getdoc(command_all)
-        sys.exit(1)
-
-    temporary_tdl_path = '/tmp/tdl'
-    command_tdl(options, [distro, arch, instance_type, temporary_tdl_path])
-
-    dsk_path, qcow2_path, image_name = target_image_paths(options,
-            distro, arch, instance_type)
-
-    built = command_image(options,
-                          [distro, arch, instance_type, temporary_tdl_path])
-    if built:
-        command_register(options, [distro, arch, instance_type])
-    elif os.access(qcow2_path, os.R_OK):
-        register = options.yes or prompt_bool('Do you want to '
-                'register your existing JEOS file with glance? (y/n) ')
-
-        if register:
-            command_register(options, arguments)
-        else:
-            logging.info('No action taken')
-            sys.exit(0)
+    return image
 
 
-def target_image_paths(options, distro, arch, instance_type):
-    arches = ('x86_64', 'i386', 'amd64')
-    arches_str = " | ".join(arches)
-    instance_types = ('gold', 'cfntools')
-    instances_str = " | ".join(instance_types)
-
-    if not arch in arches:
-        logging.error('arch %s not supported' % arch)
-        logging.error('try: heat jeos-create %s [ %s ]' % (distro, arches_str))
-        sys.exit(1)
-
-    if not instance_type in instance_types:
-        logging.error('A JEOS instance type of %s not supported' %
-            instance_type)
-        logging.error('try: heat jeos-create %s %s [ %s ]' %
-            (distro, arch, instances_str))
-        sys.exit(1)
+def template_metadata(template_path):
+    """
+    Parse the given TDL and return its metadata (name, arch, distro, version).
+    """
+    tdl = etree.parse(template_path)
+    name = tdl.findtext('name', default='n/a')
+    distro = tdl.findtext('os/name', default='n/a')
+    architecture = tdl.findtext('os/arch', default='n/a')
+    version = tdl.findtext('os/version', default='n/a')
+    return [name, distro, version, architecture]
 
 
-    if arch == 'x86_64' or arch == 'amd64':
-        src_arch = 'x86_64'
-    else:
-        src_arch = 'i386'
+def find_template_by_name(template_dir, template_name):
+    """
+    Look through the templates in the given directory, find the one with
+    matching name and return its path.
 
-    fedora_match = re.match('F(1[6-7])', distro)
-    if fedora_match:
-        version = fedora_match.group(1)
-        iso = '%s/Fedora-%s-%s-DVD.iso' % (options.images_dir, version, arch)
-    elif distro == 'U10':
-        iso = '%s/ubuntu-10.04.4-server-%s.iso' % (options.images_dir, arch)
-    elif distro == 'U12':
-        logging.error('distro not fully supported yet')
-        sys.exit(1)
-        iso = '%s/ubuntu-12.04-server-%s.iso' % (options.images_dir, arch)
-    else:
-        logging.error('distro %s not supported' % distro)
-        logging.error('try: F16, F17, U10, or U12')
-        sys.exit(1)
-
-    if not os.access(iso, os.R_OK):
-        logging.error('*** %s does not exist.' % (iso))
-        sys.exit(1)
-
-    dsk_filename = '%s/%s-%s-%s-jeos.dsk' % (options.images_dir, distro,
-                                             src_arch, instance_type)
-    qcow2_filename = '%s/%s-%s-%s-jeos.qcow2' % (options.images_dir, distro,
-                                                 arch, instance_type)
-    image_name = '%s-%s-%s' % (distro, arch, instance_type)
-
-    return dsk_filename, qcow2_filename, image_name
-
+    Return `None` otherwise.
+    """
+    for template_path in glob('%s/*.tdl' % template_dir):
+        name, distro, version, arch = template_metadata(template_path)
+        if name == template_name:
+            return template_path
 
 
 def prompt_bool(question):
+    """
+    Ask the user a yes/no question and return the answer as a bool.
+    """
     while True:
         answer = raw_input(question).lower()
         if answer in ('y', 'yes'):
@@ -285,10 +258,30 @@ def prompt_bool(question):
         if answer in ('n', 'no'):
             return False
 
-def create_tdl(distro, arch, instance_type, images_dir, jeos_dir, cfn_dir,
-               output_tdl_path):
-    tdl_file = '%s-%s-%s-jeos.tdl' % (distro, arch, instance_type)
-    tdl_path = os.path.join(jeos_dir, tdl_file)
+
+def ensure_xml_path(element, path):
+    """
+    Make sure the given path in the XML element exists. Create the elements as
+    needed.
+    """
+    if not path:
+        return
+    tag = path[0]
+    el = element.find(tag)
+    if not el:
+        el = etree.Element(tag)
+        element.append(el)
+    ensure_xml_path(el, path[1:])
+
+
+def create_tdl(tdl_path, instance_type, iso_path, cfn_dir, output_tdl_path):
+    """
+    Prepare the template for use with Heat.
+
+    If the `instance_type` is `cfntools`, include the cfn binaries.
+
+    If the `iso_path` is specified, override the template's ISO with it.
+    """
     logging.debug("Using tdl: %s" % tdl_path)
 
     # Load the cfntools into the cfntool image by encoding them in base64
@@ -303,29 +296,51 @@ def create_tdl(distro, arch, instance_type, images_dir, jeos_dir, cfn_dir,
             f.close()
             cfnpath = "/template/files/file[@name='/opt/aws/bin/%s']" % cfnname
             tdl_xml.xpath(cfnpath)[0].text = cfscript_e64
+    if iso_path:
+        root = tdl_xml.getroot()
+        ensure_xml_path(root, ['os', 'install', 'iso'])
+        elem = root.find('os/install/iso')
+        elem.text = 'file:%s' % iso_path
 
-        # TODO(sdake) INSECURE
+    # TODO(sdake) INSECURE
     tdl_xml.write(output_tdl_path, xml_declaration=True)
 
 
-def build_jeos(tdl_path, dsk_path, qcow2_path):
-    if os.path.exists(qcow2_path):
-        os.remove(qcow2_path)
-    if os.path.exists(dsk_path):
-        os.remove(dsk_path)
-
-    logging.debug("Running Oz")
+def get_oz_guest(tdl_path):
+    """
+    Returns Oz Guest instance based on the passed template.
+    """
     tdl = oz.TDL.TDL(open(tdl_path, 'r').read())
     config_file = "/etc/oz/oz.cfg"
     config = ConfigParser.SafeConfigParser()
     if os.access(config_file, os.F_OK):
         config.read(config_file)
+    return oz.GuestFactory.guest_factory(tdl, config, None, None)
 
-    guest = oz.GuestFactory.guest_factory(tdl, config, None, None)
+
+def target_image_paths(oz_guest):
+    """
+    Return the image paths and the image name that Oz will generate.
+    """
+    dsk_path = oz_guest.diskimage
+    qcow2_path = os.path.splitext(dsk_path)[0] + '.qcow2'
+    image_name = oz_guest.name.replace('-jeos', '')
+    return dsk_path, qcow2_path, image_name
+
+def build_jeos(guest):
+    """
+    Use Oz to build the JEOS image.
+    """
+    logging.debug("Running Oz")
+    dsk_path, qcow2_path, image_name = target_image_paths(guest)
+    if os.path.exists(qcow2_path):
+        os.remove(qcow2_path)
+    if os.path.exists(dsk_path):
+        os.remove(dsk_path)
+
     guest.check_for_guest_conflict()
-
-    force_download = False
     try:
+        force_download = False
         guest.generate_install_media(force_download)
         try:
             guest.generate_diskimage(force=force_download)
@@ -348,6 +363,9 @@ def build_jeos(tdl_path, dsk_path, qcow2_path):
 
 
 def register_image(client, qcow2_path, name, owner, existing_image):
+    """
+    Register the given image with Glance.
+    """
     image_meta = {'name': name,
                   'is_public': True,
                   'disk_format': 'qcow2',
@@ -356,32 +374,17 @@ def register_image(client, qcow2_path, name, owner, existing_image):
                   'owner': owner,
                   'container_format': 'bare'}
 
-    try:
-        if existing_image:
-            client.delete_image(existing_image['id'])
+    if existing_image:
+        client.delete_image(existing_image['id'])
 
-        with open(qcow2_path) as ifile:
-            image_meta = client.add_image(image_meta, ifile)
-        image_id = image_meta['id']
-        logging.debug(" Added new image with ID: %s" % image_id)
-        logging.debug(" Returned the following metadata for the new image:")
-        for k, v in sorted(image_meta.items()):
-            logging.debug(" %(k)30s => %(v)s" % locals())
-    except exception.ClientConnectionError, e:
-        logging.error((" Failed to connect to the Glance API server." +\
-               " Is the server running?" % locals()))
-        pieces = unicode(e).split('\n')
-        for piece in pieces:
-            logging.error(piece)
-            sys.exit(1)
-    except Exception, e:
-        logging.error(" Failed to add image. Got error:")
-        pieces = unicode(e).split('\n')
-        for piece in pieces:
-            logging.error(piece)
-        logging.warning(" Note: Your image metadata may still be in the " +\
-               "registry, but the image's status will likely be 'killed'.")
-
+    with open(qcow2_path) as ifile:
+        image_meta = client.add_image(image_meta, ifile)
+    image_id = image_meta['id']
+    logging.debug(" Added new image with ID: %s" % image_id)
+    logging.debug(" Returned the following metadata for the new image:")
+    for k, v in sorted(image_meta.items()):
+        logging.debug(" %(k)30s => %(v)s" % locals())
+    return image_id
 
 
 def create_options(parser):
@@ -391,6 +394,9 @@ def create_options(parser):
 
     :param parser: The option parser
     """
+    parser.add_option('-t', '--template-file',
+                      default=None,
+                      help="Path to the template file to build image from")
     parser.add_option('-j', '--jeos-dir',
                       default=os.path.join(jeos_module_path, 'jeos'),
                       help="Path to the JEOS templates directory")
@@ -399,11 +405,17 @@ def create_options(parser):
                       help="Path to cfntools directory")
     parser.add_option('-i', '--images-dir',
                       default='/var/lib/libvirt/images',
-                      help="Path to the base OS images directory")
+                      help="Path to the generated images directory")
     parser.add_option('-v', '--verbose', default=False, action="store_true",
                       help="Print more verbose output")
     parser.add_option('-d', '--debug', default=False, action="store_true",
                       help="Print more verbose output")
+    parser.add_option('-g', '--gold', default=False, action="store_true",
+                      help="Build a basic gold JEOS")
+    parser.add_option('-s', '--iso', default=None,
+                      help="Path to the ISO file to use as the base OS image")
+    parser.add_option('-G', '--register-with-glance', default=False,
+                      action='store_true', help="Register the image with Glance")
     parser.add_option('-y', '--yes', default=False, action="store_true",
                       help="Don't prompt for user input; assume the answer to "
                            "every question is 'yes'.")
@@ -514,10 +526,8 @@ def print_help(options, args):
 
 def lookup_command(parser, command_name):
     commands = {
-        'create': command_all,
-        'tdl': command_tdl,
-        'image': command_image,
-        'register': command_register,
+        'list': command_list,
+        'create': command_create,
         'help': print_help,
     }
 
@@ -526,7 +536,6 @@ def lookup_command(parser, command_name):
     except KeyError:
         parser.print_usage()
         sys.exit("Unknown command: %s" % command_name)
-
     return command
 
 
@@ -538,13 +547,9 @@ def main():
 
 Commands:
 
-    create     Create a JEOS image and register it with OpenStack
+    list        Prepare a template ready for Oz
 
-    tdl        Prepare a template ready for Oz
-
-    image      Build an image from the specified template
-
-    register   Register the built image with OpenStack Glance
+    create     Create a JEOS image from a template
 
     help <command>  Output help for one of the commands below
 
