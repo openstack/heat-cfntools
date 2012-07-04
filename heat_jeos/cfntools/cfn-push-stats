@@ -18,6 +18,7 @@ Implements cfn-signal CloudFormation functionality
 import argparse
 import logging
 import os
+import subprocess
 import random
 import sys
 
@@ -93,9 +94,17 @@ parser.add_argument('--disk-units', required=False, default='megabytes',
                     help='Specifies units for disk metrics.')
 parser.add_argument('--disk-path', required=False, default='/',
                     help='Selects the disk by the path on which to report.')
+parser.add_argument('--haproxy', required=False, action='store_true',
+                    help='Reports HAProxy loadbalancer usage.')
 parser.add_argument('--watch', required=True,
                     help='the name of the watch to post to.')
 args = parser.parse_args()
+
+server_url = metadata_server_url()
+if not server_url:
+    logger.error('can not get the metadata_server_url')
+    exit(1)
+url = '%sstats/%s/data/' % (server_url, args.watch)
 
 data = {'Namespace': 'system/linux'}
 
@@ -153,17 +162,72 @@ if args.disk_space_avail:
         'Value': disk.free / unit_map[args.disk_units],
         'Units': args.disk_units}
 
-logger.info(str(data))
 
-server_url = metadata_server_url()
-if not server_url:
-    logger.error('can not get the metadata_server_url')
-    exit(1)
-url = '%sstats/%s/data/' % (server_url, args.watch)
+# HAProxy
+# =======
+def parse_haproxy_unix_socket(res):
+    # http://docs.amazonwebservices.com/ElasticLoadBalancing/latest
+    # /DeveloperGuide/US_MonitoringLoadBalancerWithCW.html
 
-cmd_str = "curl -X PUT -H \'Content-Type:\' --data-binary \'%s\' %s" % \
-           (json.dumps(data), url)
+    type_map = {'FRONTEND': '0', 'BACKEND': '1', 'SERVER': '2', 'SOCKET': '3'}
+    num_map = {'status': 17, 'svname': 1, 'check_duration': 38, 'type': 32,
+               'req_tot': 48, 'hrsp_2xx': 40, 'hrsp_3xx': 41, 'hrsp_4xx': 42,
+               'hrsp_5xx': 43}
 
-cmd = CommandRunner(cmd_str)
-cmd.run()
-logger.info(cmd.stdout)
+    def add_stat(key, value, unit='Counter'):
+        res[key] = {'Value': value,
+                     'Units': unit}
+
+    echo = subprocess.Popen(['echo', 'show stat'],
+                            stdout=subprocess.PIPE)
+    socat = subprocess.Popen(['socat', 'stdio', '/tmp/.haproxy-stats'],
+                             stdin=echo.stdout,
+                             stdout=subprocess.PIPE)
+    end_pipe = socat.stdout
+    raw = [l.strip('\n').split(',') for l in end_pipe
+                                    if l[0] != '#' and len(l) > 2]
+    latency = 0
+    up_count = 0
+    down_count = 0
+    for f in raw:
+        if f[num_map['type']] == type_map['FRONTEND']:
+            add_stat('RequestCount', f[num_map['req_tot']])
+            add_stat('HTTPCode_ELB_4XX', f[num_map['hrsp_4xx']])
+            add_stat('HTTPCode_ELB_5XX', f[num_map['hrsp_5xx']])
+        elif f[num_map['type']] == type_map['BACKEND']:
+            add_stat('HTTPCode_Backend_2XX', f[num_map['hrsp_2xx']])
+            add_stat('HTTPCode_Backend_3XX', f[num_map['hrsp_3xx']])
+            add_stat('HTTPCode_Backend_4XX', f[num_map['hrsp_4xx']])
+            add_stat('HTTPCode_Backend_5XX', f[num_map['hrsp_5xx']])
+        else:
+            if f[num_map['status']] == 'UP':
+                up_count = up_count + 1
+            else:
+                down_count = down_count + 1
+        if f[num_map['check_duration']] != '':
+            latency = max(float(f[num_map['check_duration']]), latency)
+
+    # note: haproxy's check_duration is in ms, but Latency is in seconds
+    add_stat('Latency', str(latency / 1000), unit='Seconds')
+    add_stat('HealthyHostCount', str(up_count))
+    add_stat('UnHealthyHostCount', str(down_count))
+
+
+def send_stats(info):
+    logger.info(str(info))
+    cmd_str = "curl -X PUT -H \'Content-Type:\' --data-binary \'%s\' %s" % \
+               (json.dumps(info), url)
+
+    cmd = CommandRunner(cmd_str)
+    cmd.run()
+    logger.info(cmd.stdout)
+
+if args.haproxy:
+    lb_data = {'Namespace': 'AWS/ELB'}
+    parse_haproxy_unix_socket(lb_data)
+    send_stats(lb_data)
+
+if not args.haproxy:
+    parse_haproxy_unix_socket(data)
+    send_stats(data)
+
