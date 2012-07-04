@@ -84,8 +84,8 @@ def command_create(options, arguments):
     name                    Template name from `heat-jeos list`
     --template-file=FILE    Path to the template file to use
     --gold                  Build a basic gold JEOS (without cfntools)
+    --iso=FILE              Path to the ISO file to use as the base OS image
     --register-with-glance  Register the image with Glance after it's built
-    --iso                   Path to the ISO file to use as the base OS image
 
     The command must be run as root in order for libvirt to have permissions
     to create virtual machines and read the raw DVDs.
@@ -403,9 +403,6 @@ def create_options(parser):
     parser.add_option('-c', '--cfn-dir',
                       default=os.path.join(jeos_module_path, 'cfntools'),
                       help="Path to cfntools directory")
-    parser.add_option('-i', '--images-dir',
-                      default='/var/lib/libvirt/images',
-                      help="Path to the generated images directory")
     parser.add_option('-v', '--verbose', default=False, action="store_true",
                       help="Print more verbose output")
     parser.add_option('-d', '--debug', default=False, action="store_true",
