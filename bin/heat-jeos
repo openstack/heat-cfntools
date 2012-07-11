@@ -106,6 +106,17 @@ def command_create(options, arguments):
         logging.error("This command must be run as root")
         sys.exit(1)
 
+    if options.register_with_glance:
+        client = get_glance_client(options)
+        try:
+            client.get_image('test')
+        except exception.NotFound:
+            pass
+        except Exception:
+            print("Cannot connect to Glance. Please verify that it's running "
+                  "and check your credentials.")
+            sys.exit(1)
+
     instance_type = 'gold' if options.gold else 'cfntools'
 
     oz_guest = get_oz_guest(tdl_path)
