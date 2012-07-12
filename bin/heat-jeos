@@ -93,6 +93,7 @@ def command_create(options, arguments):
     The image ISO must be specified in the Template file under the
     `/template/os/install/iso` section or passed using the `--iso` argument.
     """
+    tdl_path = None
     if len(arguments) == 0:
         tdl_path = options.template_file
     elif len(arguments) == 1:
