@@ -32,6 +32,7 @@ Not implemented yet:
 import ConfigParser
 import errno
 import grp
+import hashlib
 import json
 import logging
 import os
@@ -527,11 +528,11 @@ class FilesHandler(object):
 
             if 'content' in meta:
                 if isinstance(meta['content'], basestring):
-                    f = open(dest, 'w')
+                    f = open(dest, 'w+')
                     f.write(meta['content'])
                     f.close()
                 else:
-                    f = open(dest, 'w')
+                    f = open(dest, 'w+')
                     f.write(json.dumps(meta['content'], indent=4))
                     f.close()
             elif 'source' in meta:
@@ -766,7 +767,7 @@ def metadata_server_url():
         if not server_url[-1] == '/':
             server_url += '/'
         return server_url
-    except IOError:
+    except:
         return None
 
 
@@ -791,6 +792,7 @@ class Metadata(object):
         # TODO(asalkeld) is this metadata for the local resource?
         self._is_local_metadata = True
         self._metadata = None
+        self._has_changed = False
 
     def metadata_resource_url(self):
         server_url = metadata_server_url()
@@ -830,6 +832,24 @@ class Metadata(object):
             self._metadata = json.loads(self._data)
         else:
             self._metadata = self._data
+
+        cm = hashlib.md5(json.dumps(self._metadata))
+        current_md5 = cm.hexdigest()
+        old_md5 = None
+
+        try:
+            with open('/tmp/last_metadata') as lm:
+                om = hashlib.md5()
+                om.update(lm.read())
+                old_md5 = om.hexdigest()
+        except:
+            pass
+        if old_md5 != current_md5:
+            self._has_changed = True
+
+        # save current metadata to file
+        with open('/tmp/last_metadata', 'w+') as cf:
+            cf.write(json.dumps(self._metadata))
 
     def __str__(self):
         return json.dumps(self._metadata)
@@ -891,3 +911,8 @@ class Metadata(object):
                 s = self._config.get("services")
                 sh = ServicesHandler(s, resource=self.resource, hooks=hooks)
                 sh.monitor_services()
+
+            if self._has_changed:
+                for h in hooks:
+                    hooks[h].event('post.update',
+                                   self.resource, self.resource)
