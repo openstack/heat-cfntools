@@ -228,6 +228,5 @@ if args.haproxy:
     send_stats(lb_data)
 
 if not args.haproxy:
-    parse_haproxy_unix_socket(data)
     send_stats(data)
 
