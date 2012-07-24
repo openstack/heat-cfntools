@@ -102,6 +102,8 @@ parser.add_argument('--disk-path', required=False, default='/',
                     help='Selects the disk by the path on which to report.')
 parser.add_argument('--haproxy', required=False, action='store_true',
                     help='Reports HAProxy loadbalancer usage.')
+parser.add_argument('--heartbeat', required=False, action='store_true',
+                    help='Sends a Heartbeat.')
 parser.add_argument('--watch', required=True,
                     help='the name of the watch to post to.')
 args = parser.parse_args()
@@ -118,6 +120,13 @@ data = {'Namespace': 'system/linux'}
 # ===============
 if args.service_failure:
     data['ServiceFailure'] = {
+        'Value': 1,
+        'Units': 'Counter'}
+
+# heatbeat
+# ========
+if args.heartbeat:
+    data['Heartbeat'] = {
         'Value': 1,
         'Units': 'Counter'}
 
