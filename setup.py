@@ -20,7 +20,7 @@ import subprocess
 import setuptools
 
 setuptools.setup(
-    name='heat_jeos',
+    name='heat-jeos',
     version='1',
     description='The heat-jeos project provides services for creating '
                 '(J)ust (E)nough (O)perating (S)ystem images',
