@@ -21,7 +21,7 @@ import setuptools
 
 setuptools.setup(
     name='heat-jeos',
-    version='1',
+    version='5',
     description='The heat-jeos project provides services for creating '
                 '(J)ust (E)nough (O)perating (S)ystem images',
     license='Apache License (2.0)',
