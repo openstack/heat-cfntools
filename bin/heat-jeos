@@ -59,7 +59,10 @@ def command_list(options, arguments):
     """
     templates = sorted(glob('%s/*.tdl' % options.jeos_dir))
     table = PrettyTable(['Name', 'OS', 'Version', 'Architecture'])
-    table.set_field_align('Name', 'l')
+    try:  # prettytable version 0.5 -- on Fedora 16 and 17
+        table.set_field_align('Name', 'l')
+    except AttributeError:  # prettytable version 0.6  -- on Ubuntu 12.04
+        table.align['Name'] = 'l'
     for template_path in templates:
         table.add_row(template_metadata(template_path))
     print table
