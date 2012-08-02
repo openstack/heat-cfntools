@@ -22,6 +22,7 @@ EOF
 chmod +x /etc/rc.d/rc.local
     </command>
     <command name='packages'>
+yum -y update yum
 yum -y update --skip-broken
 yum -y install yum-plugin-fastestmirror
 yum -y update
