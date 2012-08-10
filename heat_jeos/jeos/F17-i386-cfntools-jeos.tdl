@@ -10,11 +10,18 @@
   </os>
   <description>Fedora 17</description>
   <commands>
-    <command name='commands'>
-yum -y update --skip-broken;yum -y install yum-plugin-fastestmirror;yum -y update;/usr/sbin/useradd ec2-user;echo -e 'ec2-user\tALL=(ALL)\tNOPASSWD: ALL' >> /etc/sudoers;yum -y install cloud-init;sed --in-place -e s/Type=oneshot/"Type=oneshot\nTimeoutSec=0"/ /lib/systemd/system/cloud-final.service;at >> /etc/rc.d/rc.local &lt;&lt; EOF;chmod +x /etc/rc.d/rc.local;chmod +x /opt/aws/bin/cfn-*
-#!/bin/bash
-setenforce 0
-EOF
+    <command name='user'>
+/usr/sbin/useradd ec2-user
+echo -e 'ec2-user\tALL=(ALL)\tNOPASSWD: ALL' >> /etc/sudoers
+    </command>
+    <command name='packages'>
+yum -y update fedora-release
+yum -y install yum-plugin-fastestmirror cloud-init python-psutil
+yum -y update
+sed --in-place -e s/Type=oneshot/"Type=oneshot\nTimeoutSec=0"/ /lib/systemd/system/cloud-final.service
+    </command>
+    <command name='cfn-perms'>
+chmod +x /opt/aws/bin/cfn-*
     </command>
   </commands>
   <files>
