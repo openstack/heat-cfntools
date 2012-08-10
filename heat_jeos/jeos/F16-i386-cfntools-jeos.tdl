@@ -25,8 +25,7 @@ chmod +x /etc/rc.d/rc.local
 yum -y update fedora-release
 yum -y install yum-plugin-fastestmirror cloud-init
 yum -y update
-sed --in-place -e s/Type=oneshot/"Type=oneshot\nTimeoutSec=0"/ /lib/systemd/syst
-em/cloud-final.service
+sed --in-place -e s/Type=oneshot/"Type=oneshot\nTimeoutSec=0"/ /lib/systemd/system/cloud-final.service
     </command>
     <command name='cfn-perms'>
 chmod +x /opt/aws/bin/cfn-*
