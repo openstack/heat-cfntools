@@ -100,6 +100,8 @@ parser.add_argument('--disk-units', required=False, default='megabytes',
                     help='Specifies units for disk metrics.')
 parser.add_argument('--disk-path', required=False, default='/',
                     help='Selects the disk by the path on which to report.')
+parser.add_argument('--cpu-util', required=False, action="store_true",
+                    help='Reports cpu utilization in percentages.')
 parser.add_argument('--haproxy', required=False, action='store_true',
                     help='Reports HAProxy loadbalancer usage.')
 parser.add_argument('--heartbeat', required=False, action='store_true',
@@ -131,7 +133,7 @@ if args.heartbeat:
         'Units': 'Counter'}
 
 # memory space
-# ==========
+# ============
 if args.mem_util or args.mem_used or args.mem_avail:
     mem = psutil.phymem_usage()
 if args.mem_util:
@@ -177,6 +179,14 @@ if args.disk_space_avail:
         'Value': disk.free / unit_map[args.disk_units],
         'Units': args.disk_units}
 
+# cpu utilization
+# ===============
+if args.cpu_util:
+    # blocks for 1 second.
+    cpu_percent = psutil.cpu_percent(interval=1)
+    data['CPUUtilization'] = {
+        'Value': cpu_percent,
+        'Units': 'Percent'}
 
 # HAProxy
 # =======
