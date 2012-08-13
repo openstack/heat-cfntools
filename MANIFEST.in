@@ -9,6 +9,7 @@ include heat_jeos/jeos/F17-i386-cfntools-jeos.tdl
 include heat_jeos/jeos/F16-x86_64-gold-jeos.tdl
 include heat_jeos/jeos/F17-x86_64-gold-jeos.tdl
 include heat_jeos/jeos/F16-x86_64-cfntools-jeos.tdl
+include heat_jeos/jeos/F16-x86_64-cfntools-openshift-jeos.tdl
 include heat_jeos/jeos/F17-x86_64-cfntools-jeos.tdl
 include heat_jeos/jeos/U10-amd64-cfntools-jeos.tdl
 include heat_jeos/cfntools/cfn-init
