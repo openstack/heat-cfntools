@@ -62,14 +62,13 @@ args = parser.parse_args()
 log_format = '%(levelname)s [%(asctime)s] %(message)s'
 logging.basicConfig(format=log_format, level=logging.DEBUG)
 
-parent_logger = logging.getLogger('cfntools')
-logger = logging.getLogger('cfntools.cfn-signal')
+LOG = logging.getLogger('cfntools')
 log_file_name = "/var/log/cfn-signal.log"
 file_handler = logging.FileHandler(log_file_name)
 file_handler.setFormatter(logging.Formatter(log_format))
-parent_logger.addHandler(file_handler)
+LOG.addHandler(file_handler)
 
-logger.debug('cfn-signal called %s ' % (str(args)))
+LOG.debug('cfn-signal called %s ' % (str(args)))
 
 status = 'FAILURE'
 if args.exit_code:

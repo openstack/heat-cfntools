@@ -76,12 +76,11 @@ if not args.logical_resource_id:
 log_format = '%(levelname)s [%(asctime)s] %(message)s'
 logging.basicConfig(format=log_format, level=logging.DEBUG)
 
-parent_logger = logging.getLogger('cfntools')
-logger = logging.getLogger('cfntools.cfn-get-metadata')
+LOG = logging.getLogger('cfntools')
 log_file_name = "/var/log/cfn-get-metadata.log"
 file_handler = logging.FileHandler(log_file_name)
 file_handler.setFormatter(logging.Formatter(log_format))
-parent_logger.addHandler(file_handler)
+LOG.addHandler(file_handler)
 
 metadata = Metadata(args.stack_name,
                     args.logical_resource_id,
@@ -89,4 +88,4 @@ metadata = Metadata(args.stack_name,
                     secret_key=args.secret_key,
                     region=args.region)
 metadata.retrieve()
-print str(metadata)
+LOG.debug(str(metadata))

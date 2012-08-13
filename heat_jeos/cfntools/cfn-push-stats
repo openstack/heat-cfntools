@@ -26,17 +26,16 @@ import sys
 log_format = '%(levelname)s [%(asctime)s] %(message)s'
 logging.basicConfig(format=log_format, level=logging.DEBUG)
 
-parent_logger = logging.getLogger('cfntools')
-logger = logging.getLogger('cfntools.cfn-push-stats')
+LOG = logging.getLogger('cfntools')
 log_file_name = "/var/log/cfn-push-stats.log"
 file_handler = logging.FileHandler(log_file_name)
 file_handler.setFormatter(logging.Formatter(log_format))
-parent_logger.addHandler(file_handler)
+LOG.addHandler(file_handler)
 
 try:
     import psutil
 except ImportError:
-    logger.warn("psutil not available. If you want process and memory "
+    LOG.warn("psutil not available. If you want process and memory "
             "statistics, you need to install it.")
 #
 #  --aws-credential-file=PATH  Specifies the location of the file with AWS
@@ -112,7 +111,7 @@ args = parser.parse_args()
 
 server_url = metadata_server_url()
 if not server_url:
-    logger.error('can not get the metadata_server_url')
+    LOG.error('can not get the metadata_server_url')
     exit(1)
 url = '%sstats/%s/data/' % (server_url, args.watch)
 
@@ -239,13 +238,13 @@ def parse_haproxy_unix_socket(res):
 
 
 def send_stats(info):
-    logger.info(str(info))
+    LOG.info(str(info))
     cmd_str = "curl -X PUT -H \'Content-Type:\' --data-binary \'%s\' %s" % \
                (json.dumps(info), url)
 
     cmd = CommandRunner(cmd_str)
     cmd.run()
-    logger.info(cmd.stdout)
+    LOG.info(cmd.stdout)
 
 if args.haproxy:
     lb_data = {'Namespace': 'AWS/ELB'}

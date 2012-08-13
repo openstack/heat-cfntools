@@ -50,7 +50,7 @@ from urllib2 import urlopen, Request
 from urlparse import urlparse, urlunparse
 
 
-logger = logging.getLogger('cfntools')
+LOG = logging.getLogger(__name__)
 
 
 def to_boolean(b):
@@ -127,7 +127,7 @@ class Hook(object):
            ev_name in self.triggers:
             CommandRunner(self.action).run(user=self.runas)
         else:
-            logger.debug('event: {%s, %s, %s} did not match %s' %
+            LOG.debug('event: {%s, %s, %s} did not match %s' %
                           (ev_name, ev_object, ev_resource, self.__str__()))
 
     def __str__(self):
@@ -169,7 +169,7 @@ class CommandRunner(object):
         Returns:
             self
         """
-        logger.debug("Running command: %s" % self._command)
+        LOG.debug("Running command: %s" % self._command)
         cmd = ['su', user, '-c', self._command]
         subproc = subprocess.Popen(cmd, stdout=subprocess.PIPE,
                                    stderr=subprocess.PIPE)
@@ -310,14 +310,14 @@ class RpmHelper(object):
         if rpms:
             cmd = "rpm -U --force --nosignature "
             cmd += " ".join(packages)
-            logger.info("Installing packages: %s" % cmd)
+            LOG.info("Installing packages: %s" % cmd)
         else:
             cmd = "yum -y install "
             cmd += " ".join(packages)
-            logger.info("Installing packages: %s" % cmd)
+            LOG.info("Installing packages: %s" % cmd)
         command = CommandRunner(cmd).run()
         if command.status:
-            logger.warn("Failed to install packages: %s" % cmd)
+            LOG.warn("Failed to install packages: %s" % cmd)
 
     @classmethod
     def downgrade(cls, packages, rpms=True):
@@ -341,10 +341,10 @@ class RpmHelper(object):
         else:
             cmd = "yum -y downgrade "
             cmd += " ".join(packages)
-            logger.info("Downgrading packages: %s" % cmd)
+            LOG.info("Downgrading packages: %s" % cmd)
             command = Command(cmd).run()
             if command.status:
-                logger.warn("Failed to downgrade packages: %s" % cmd)
+                LOG.warn("Failed to downgrade packages: %s" % cmd)
 
 
 class PackagesHandler(object):
@@ -429,8 +429,7 @@ class PackagesHandler(object):
                 # FIXME:print non-error, but skipping pkg
                 pass
             elif not RpmHelper.yum_package_available(pkg):
-                logger.warn("Skipping package '%s'. Not available via yum" %
-                             pkg)
+                LOG.warn("Skipping package '%s'. Not available via yum" % pkg)
             elif not ver:
                 installs.append(pkg)
             else:
@@ -504,7 +503,7 @@ class PackagesHandler(object):
         for manager, package_entries in packages:
             handler = self._package_handler(manager)
             if not handler:
-                logger.warn("Skipping invalid package type: %s" % manager)
+                LOG.warn("Skipping invalid package type: %s" % manager)
             else:
                 handler(self, package_entries)
 
@@ -522,9 +521,9 @@ class FilesHandler(object):
                 os.makedirs(os.path.dirname(dest))
             except OSError as e:
                 if e.errno == errno.EEXIST:
-                    logger.debug(str(e))
+                    LOG.debug(str(e))
                 else:
-                    logger.exception(e)
+                    LOG.exception(e)
 
             if 'content' in meta:
                 if isinstance(meta['content'], basestring):
@@ -538,7 +537,7 @@ class FilesHandler(object):
             elif 'source' in meta:
                 CommandRunner('wget -O %s %s' % (dest, meta['source'])).run()
             else:
-                logger.error('%s %s' % (dest, str(meta)))
+                LOG.error('%s %s' % (dest, str(meta)))
                 continue
 
             uid = -1
@@ -585,7 +584,7 @@ class SourcesHandler(object):
 
     def _decompress(self, archive, dest_dir):
         cmd_str = ''
-        logger.debug("Decompressing")
+        LOG.debug("Decompressing")
         (r, ext) = os.path.splitext(archive)
         if ext == '.tgz':
             cmd_str = 'tar -C %s -xzf %s' % (dest_dir, archive)
@@ -623,9 +622,9 @@ class SourcesHandler(object):
                 os.makedirs(dest)
             except OSError as e:
                 if e.errno == errno.EEXIST:
-                    logger.debug(str(e))
+                    LOG.debug(str(e))
                 else:
-                    logger.exception(e)
+                    LOG.exception(e)
 
 
 class ServicesHandler(object):
@@ -676,10 +675,10 @@ class ServicesHandler(object):
         if "enabled" in properties:
             enable = to_boolean(properties["enabled"])
             if enable:
-                logger.info("Enabling service %s" % service)
+                LOG.info("Enabling service %s" % service)
                 handler(self, service, "enable")
             else:
-                logger.info("Disabling service %s" % service)
+                LOG.info("Disabling service %s" % service)
                 handler(self, service, "disable")
 
         if "ensureRunning" in properties:
@@ -687,10 +686,10 @@ class ServicesHandler(object):
             command = handler(self, service, "status")
             running = command.status == 0
             if ensure_running and not running:
-                logger.info("Starting service %s" % service)
+                LOG.info("Starting service %s" % service)
                 handler(self, service, "start")
             elif not ensure_running and running:
-                logger.info("Stopping service %s" % service)
+                LOG.info("Stopping service %s" % service)
                 handler(self, service, "stop")
 
     def _monitor_service(self, handler, service, properties):
@@ -699,10 +698,10 @@ class ServicesHandler(object):
             command = handler(self, service, "status")
             running = command.status == 0
             if ensure_running and not running:
-                logger.warn("Restarting service %s" % service)
+                LOG.warn("Restarting service %s" % service)
                 start_cmd = handler(self, service, "start")
                 if start_cmd.status != 0:
-                    logger.warning('Service %s did not start. STDERR: %s' %
+                    LOG.warning('Service %s did not start. STDERR: %s' %
                                     (service, start_cmd.stderr))
                     return
                 for h in self.hooks:
@@ -738,7 +737,7 @@ class ServicesHandler(object):
         for manager, service_entries in self._services.iteritems():
             handler = self._service_handler(manager)
             if not handler:
-                logger.warn("Skipping invalid service type: %s" % manager)
+                LOG.warn("Skipping invalid service type: %s" % manager)
             else:
                 self._initialize_services(handler, service_entries)
 
@@ -751,7 +750,7 @@ class ServicesHandler(object):
         for manager, service_entries in self._services.iteritems():
             handler = self._service_handler(manager)
             if not handler:
-                logger.warn("Skipping invalid service type: %s" % manager)
+                LOG.warn("Skipping invalid service type: %s" % manager)
             else:
                 self._monitor_services(handler, service_entries)
 
