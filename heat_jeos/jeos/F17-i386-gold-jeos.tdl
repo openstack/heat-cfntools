@@ -1,5 +1,5 @@
 <template>
-  <name>F17-i386-gold-jeos</name>
+  <name>F17-i386-gold</name>
   <os>
     <name>Fedora</name>
     <version>17</version>

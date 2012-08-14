@@ -1,5 +1,5 @@
 <template>
-  <name>U10-x86_64-cfntools-jeos</name>
+  <name>U10-x86_64-cfntools</name>
   <os>
     <name>Ubuntu</name>
     <version>10.04</version>

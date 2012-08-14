@@ -339,7 +339,7 @@ def target_image_paths(oz_guest):
     """
     dsk_path = oz_guest.diskimage
     qcow2_path = os.path.splitext(dsk_path)[0] + '.qcow2'
-    image_name = oz_guest.name.replace('-jeos', '')
+    image_name = oz_guest.name
     return dsk_path, qcow2_path, image_name
 
 def build_jeos(guest):

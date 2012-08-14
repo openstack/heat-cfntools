@@ -1,5 +1,5 @@
 <template>
-  <name>F16-i386-gold-jeos</name>
+  <name>F16-i386-gold</name>
   <os>
     <name>Fedora</name>
     <version>16</version>
