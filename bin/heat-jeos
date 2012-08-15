@@ -71,7 +71,7 @@ def command_list(options, arguments):
 register_with_glance_message = """
 Now register with Glance using:
 
-glance add name=%s is_public=true disk_format=qcow2 container_format=ovf < %s
+glance add name=%s is_public=true disk_format=qcow2 container_format=bare < %s
 """
 
 
