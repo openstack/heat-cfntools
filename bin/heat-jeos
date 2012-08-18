@@ -86,7 +86,6 @@ def command_create(options, arguments):
     Arguments:
     name                    Template name from `heat-jeos list`
     --template-file=FILE    Path to the template file to use
-    --gold                  Build a basic gold JEOS (without cfntools)
     --iso=FILE              Path to the ISO file to use as the base OS image
     --register-with-glance  Register the image with Glance after it's built
 
@@ -121,7 +120,8 @@ def command_create(options, arguments):
                   "and check your credentials.")
             sys.exit(1)
 
-    instance_type = 'gold' if options.gold else 'cfntools'
+    splitname = os.path.basename(tdl_path).split('-')
+    instance_type = splitname[2]
 
     oz_guest = get_oz_guest(tdl_path)
     dsk_path, qcow2_path, image_name = target_image_paths(oz_guest)
@@ -422,8 +422,6 @@ def create_options(parser):
                       help="Print more verbose output")
     parser.add_option('-d', '--debug', default=False, action="store_true",
                       help="Print more verbose output")
-    parser.add_option('-g', '--gold', default=False, action="store_true",
-                      help="Build a basic gold JEOS")
     parser.add_option('-s', '--iso', default=None,
                       help="Path to the ISO file to use as the base OS image")
     parser.add_option('-G', '--register-with-glance', default=False,
