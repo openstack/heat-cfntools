@@ -557,9 +557,9 @@ def main():
 
 Commands:
 
-    list        Prepare a template ready for Oz
+    list            Prepare a template ready for Oz
 
-    create     Create a JEOS image from a template
+    create          Create a JEOS image from a template
 
     help <command>  Output help for one of the commands below
 
