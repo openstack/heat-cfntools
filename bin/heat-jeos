@@ -29,6 +29,7 @@ import optparse
 import os
 import os.path
 import re
+from StringIO import StringIO
 import sys
 import textwrap
 import time
@@ -123,7 +124,9 @@ def command_create(options, arguments):
     splitname = os.path.basename(tdl_path).split('-')
     instance_type = splitname[2]
 
-    oz_guest = get_oz_guest(tdl_path)
+    with open(tdl_path, 'r') as f:
+        tdl_xml = f.read()
+    oz_guest = get_oz_guest(tdl_xml)
     dsk_path, qcow2_path, image_name = target_image_paths(oz_guest)
 
     should_build_jeos = True
@@ -132,9 +135,8 @@ def command_create(options, arguments):
             'found on disk. Do you want to build a fresh JEOS? (y/n) ')
 
     if should_build_jeos:
-        final_tdl = '/tmp/tdl'
-        create_tdl(tdl_path, instance_type, options.iso, options.cfn_dir,
-                   final_tdl)
+        final_tdl = create_tdl(tdl_path, instance_type, options.iso,
+                               options.cfn_dir)
 
         logging.info('Creating JEOS image (%s) - '
                      'this takes approximately 10 minutes.' % image_name)
@@ -289,13 +291,15 @@ def ensure_xml_path(element, path):
     ensure_xml_path(el, path[1:])
 
 
-def create_tdl(tdl_path, instance_type, iso_path, cfn_dir, output_tdl_path):
+def create_tdl(tdl_path, instance_type, iso_path, cfn_dir):
     """
     Prepare the template for use with Heat.
 
     If the `instance_type` is `cfntools`, include the cfn binaries.
 
     If the `iso_path` is specified, override the template's ISO with it.
+
+    Returns the TDL contents as a string.
     """
     logging.debug("Using tdl: %s" % tdl_path)
 
@@ -317,15 +321,16 @@ def create_tdl(tdl_path, instance_type, iso_path, cfn_dir, output_tdl_path):
         elem = root.find('os/install/iso')
         elem.text = 'file:%s' % iso_path
 
-    # TODO(sdake) INSECURE
-    tdl_xml.write(output_tdl_path, xml_declaration=True)
+    string_writer = StringIO()
+    tdl_xml.write(string_writer, xml_declaration=True)
+    return string_writer.getvalue()
 
 
-def get_oz_guest(tdl_path):
+def get_oz_guest(tdl_xml):
     """
     Returns Oz Guest instance based on the passed template.
     """
-    tdl = oz.TDL.TDL(open(tdl_path, 'r').read())
+    tdl = oz.TDL.TDL(tdl_xml)
     config_file = "/etc/oz/oz.cfg"
     config = ConfigParser.SafeConfigParser()
     if os.access(config_file, os.F_OK):
