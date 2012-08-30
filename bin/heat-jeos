@@ -110,9 +110,6 @@ def command_create(options, arguments):
                   "and check your credentials.")
             sys.exit(1)
 
-    splitname = os.path.basename(tdl_path).split('-')
-    instance_type = splitname[2]
-
     with open(tdl_path, 'r') as f:
         tdl_xml = f.read()
     oz_guest = get_oz_guest(tdl_xml)
@@ -124,8 +121,7 @@ def command_create(options, arguments):
             'found on disk. Do you want to build a fresh JEOS? (y/n) ')
 
     if should_build_jeos:
-        final_tdl = create_tdl(tdl_xml, instance_type, options.iso,
-                               options.cfn_dir)
+        final_tdl = create_tdl(tdl_xml, options.iso, options.cfn_dir)
 
         logging.info('Creating JEOS image (%s) - '
                      'this takes approximately 10 minutes.' % image_name)
