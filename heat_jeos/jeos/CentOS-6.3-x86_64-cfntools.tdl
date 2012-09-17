@@ -34,6 +34,7 @@ yum -y update
 curl -O http://ftp.ps.pl/pub/Linux/fedora-epel/6/i386/epel-release-6-7.noarch.rpm
 rpm -Uvh epel-release-6-7.noarch.rpm
 yum -y install perl python python-setuptools cloud-init
+easy_install argparse
 rm -f epel-release-6-7.noarch.rpm
     </command>
     <command name='cfn-perms'>
