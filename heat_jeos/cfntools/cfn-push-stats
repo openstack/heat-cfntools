@@ -13,7 +13,7 @@
 #    under the License.
 
 """
-Implements cfn-signal CloudFormation functionality
+Implements cfn-push-stats CloudFormation functionality
 """
 import argparse
 import logging
@@ -21,41 +21,21 @@ import os
 import subprocess
 import random
 import sys
+from boto.ec2.cloudwatch import CloudWatchConnection
 
 
 log_format = '%(levelname)s [%(asctime)s] %(message)s'
-logging.basicConfig(format=log_format, level=logging.DEBUG)
-
-LOG = logging.getLogger('cfntools')
 log_file_name = "/var/log/cfn-push-stats.log"
-file_handler = logging.FileHandler(log_file_name)
-file_handler.setFormatter(logging.Formatter(log_format))
-LOG.addHandler(file_handler)
+logging.basicConfig(filename=log_file_name,
+                    format=log_format,
+                    level=logging.DEBUG)
+LOG = logging.getLogger('cfntools')
 
 try:
     import psutil
 except ImportError:
     LOG.warn("psutil not available. If you want process and memory "
             "statistics, you need to install it.")
-#
-#  --aws-credential-file=PATH  Specifies the location of the file with AWS
-#                              credentials.
-#  --aws-access-key-id=VALUE   Specifies the AWS access key ID to use to
-#                              identify the caller.
-#  --aws-secret-key=VALUE      Specifies the AWS secret key to use to sign
-#                              the request.
-#  --from-cron  Specifies that this script is running from cron.
-#
-# Examples
-#
-# To perform a simple test run without posting data to Amazon CloudWatch
-#
-#  ./mon-put-instance-data.pl --mem-util --verify --verbose
-#
-# To set a five-minute cron schedule to report memory and disk space utilization to CloudWatch
-#
-#  */5 * * * * ~/aws-scripts-mon/mon-put-instance-data.pl --mem-util --disk-space-util --disk-path=/ --from-cron
-#
 
 if os.path.exists('/opt/aws/bin'):
     sys.path.insert(0, '/opt/aws/bin')
@@ -75,6 +55,9 @@ description = " "
 parser = argparse.ArgumentParser(description=description)
 parser.add_argument('-v', '--verbose', action="store_true",
                     help="Verbose logging", required=False)
+parser.add_argument('--credential-file', dest="credential_file",
+                    help="credential-file", required=False,
+                    default='/etc/cfn/cfn-credentials')
 parser.add_argument('--service-failure', required=False, action="store_true",
                     help='Reports a service falure.')
 parser.add_argument('--mem-util', required=False, action="store_true",
@@ -109,13 +92,12 @@ parser.add_argument('--watch', required=True,
                     help='the name of the watch to post to.')
 args = parser.parse_args()
 
-server_url = metadata_server_url()
-if not server_url:
-    LOG.error('can not get the metadata_server_url')
-    exit(1)
-url = '%sstats/%s/data/' % (server_url, args.watch)
+LOG.debug('cfn-push-stats called %s ' % (str(args)))
 
-data = {'Namespace': 'system/linux'}
+credentials = parse_creds_file(args.credential_file)
+
+namespace = 'system/linux'
+data = {}
 
 # service failure
 # ===============
@@ -238,19 +220,38 @@ def parse_haproxy_unix_socket(res):
 
 
 def send_stats(info):
-    LOG.info(str(info))
-    cmd_str = "curl -X PUT -H \'Content-Type:\' --data-binary \'%s\' %s" % \
-               (json.dumps(info), url)
 
-    cmd = CommandRunner(cmd_str)
-    cmd.run()
-    LOG.info(cmd.stdout)
+    # Get a client boto connection, we use the settings and credentials
+    # from /etc/boto.cfg which is deployed as part of instance configuration
+    # hence pass None/None here.  We do need the hard-coded port/path as boto
+    # can't read these from config values
+    # FIXME : currently only http due to is_secure=False
+    client = CloudWatchConnection(
+             aws_access_key_id=credentials['AWSAccessKeyId'],
+             aws_secret_access_key=credentials['AWSSecretKey'],
+             is_secure=False, port=8003, path="/v1", debug=0)
+
+    # Then we send the metric datapoints passed in "info", note this could
+    # contain multiple keys as the options parsed above are noe exclusive
+    # The alarm name is passed as a dimension so the metric datapoint can
+    # be associated with the alarm/watch in the engine
+    metric_dims = [{'AlarmName': args.watch}]
+    for key in info:
+        LOG.info("Sending watch %s metric %s, Units %s, Value %s" %
+              (args.watch, key, info[key]['Units'], info[key]['Value']))
+        client.put_metric_data(namespace=namespace,
+                               name=key,
+                               value=info[key]['Value'],
+                               timestamp=None,  # means use "now" in the engine
+                               unit=info[key]['Units'],
+                               dimensions=metric_dims,
+                               statistics=None)
+
 
 if args.haproxy:
-    lb_data = {'Namespace': 'AWS/ELB'}
+    namespace = 'AWS/ELB'
+    lb_data = {}
     parse_haproxy_unix_socket(lb_data)
     send_stats(lb_data)
-
-if not args.haproxy:
+else:
     send_stats(data)
-

@@ -38,6 +38,7 @@ import logging
 import os
 import os.path
 import pwd
+import re
 try:
     import rpmUtils.updates as rpmupdates
     import rpmUtils.miscutils as rpmutils
@@ -57,6 +58,20 @@ def to_boolean(b):
     val = b.lower().strip() if isinstance(b, basestring) else b
     return val in [True, 'true', 'yes', '1', 1]
 
+def parse_creds_file(path='/etc/cfn/cfn-credentials'):
+    '''
+    Parse the cfn credentials file
+    Default location is as specified, and it is expected to contain
+    exactly two keys "AWSAccessKeyId" and "AWSSecretKey)
+    The two keys are returned a dict (if found)
+    '''
+    creds = {'AWSAccessKeyId': None, 'AWSSecretKey': None}
+    for line in open(path):
+        for key in creds:
+            match = re.match("^%s *= *(.*)$" % key, line)
+            if match:
+                creds[key] = match.group(1)
+    return creds
 
 class HupConfig(object):
     def __init__(self, fp_list):
