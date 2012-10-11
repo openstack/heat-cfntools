@@ -26,10 +26,8 @@ import os
 import os.path
 import sys
 import time
+import traceback
 
-
-from glance.common import exception
-from glance import client as glance_client
 from prettytable import PrettyTable
 
 
@@ -40,6 +38,7 @@ possible_topdir = os.path.normpath(os.path.join(os.path.abspath(sys.argv[0]),
 if os.path.exists(os.path.join(possible_topdir, 'heat_jeos')):
     sys.path.insert(0, possible_topdir)
 
+from heat_jeos import glance_clients as glance
 from heat_jeos.utils import *
 
 
@@ -92,7 +91,7 @@ def command_create(options, arguments):
         tdl_path = find_template_by_name(options.jeos_dir, arguments[0])
 
     if not tdl_path:
-        print 'You must specify a correct template name or path.'
+        logging.info('You must specify a correct template name or path.')
         sys.exit(1)
 
     if os.geteuid() != 0:
@@ -100,14 +99,18 @@ def command_create(options, arguments):
         sys.exit(1)
 
     if options.register_with_glance:
-        client = get_glance_client(options)
         try:
-            client.get_image('test')
-        except exception.NotFound:
+            client = glance.client(options)
+            glance.get_image(client, 'test')
+        except glance.NotFoundError:
             pass
-        except Exception:
-            print("Cannot connect to Glance. Please verify that it's running "
-                  "and check your credentials.")
+        except glance.ConnectionError:
+            logging.error("Cannot connect to Glance. Please verify that it's "
+                  "running.")
+            sys.exit(1)
+        except glance.AuthError:
+            logging.error("Cannot authenticate to Keystone, please check your "
+                  "credentials.")
             sys.exit(1)
 
     with open(tdl_path, 'r') as f:
@@ -142,20 +145,20 @@ def command_create(options, arguments):
         sys.exit(1)
 
     try:
-        client = get_glance_client(options)
-        image = find_image(client, image_name)
+        client = glance.client(options)
+        image = glance.find_image_by_name(client, image_name)
         if image:
             delete_image = options.yes or prompt_bool('Do you want to '
                     'delete the existing JEOS in glance? (y/n) ')
             if delete_image:
-                client.delete_image(image['id'])
+                glance.delete_image(client, image)
             else:
                 logging.info('No action taken')
                 sys.exit(0)
-        image_id = register_image(client, qcow2_path, image_name,
+        image_id = glance.register_image(client, qcow2_path, image_name,
                                   options.username, image)
         print('\nImage %s was registered with ID %s' % (image_name, image_id))
-    except exception.ClientConnectionError, e:
+    except glance.ConnectionError, e:
         logging.error('Failed to connect to the Glance API server.')
         sys.exit(1)
     except Exception, e:
@@ -164,66 +167,6 @@ def command_create(options, arguments):
         logging.warning("Note: Your image metadata may still be in the "
                "registry, but the image's status will likely be 'killed'.")
         sys.exit(1)
-
-
-def get_glance_client(options):
-    """
-    Returns a new Glance client connection based on the passed options.
-    """
-    creds = dict(username=options.username,
-                 password=options.password,
-                 tenant=options.tenant,
-                 auth_url=options.auth_url,
-                 strategy=options.auth_strategy)
-
-    # When neither host nor port are specified and we're using Keystone auth,
-    # let it tell us the Glance entrypoint
-    configure_via_auth = (options.auth_strategy == 'keystone' and
-                          not (options.glance_host or options.glance_port))
-
-    # NOTE: these are ignored by the client when `configure_via_auth` is True
-    glance_host = options.glance_host if options.glance_host else '0.0.0.0'
-    try:
-        glance_port = int(options.glance_port) if options.glance_port else 9292
-    except:
-        logging.error('Port must be a number.')
-        sys.exit(1)
-
-    if configure_via_auth:
-        logging.debug('Using Glance entry point received by Keystone.')
-    else:
-        logging.debug('Connecting to Glance at host: %s, port: %d' %
-                      (glance_host, glance_port))
-
-    client = glance_client.Client(host=glance_host,
-                                  port=glance_port,
-                                  use_ssl=False,
-                                  auth_tok=None,
-                                  configure_via_auth=configure_via_auth,
-                                  creds=creds)
-    return client
-
-
-def find_image(client, image_name):
-    """
-    Looks up the image of a given name in Glance.
-
-    Returns the image metadata or None if no image is found.
-    """
-    parameters = {
-        "filters": {},
-        "limit": 10,
-    }
-
-    images = client.get_images(**parameters)
-
-    try:
-        image = [i for i in images if i['name'] == image_name][0]
-    except IndexError:
-        image = None
-    return image
-
-
 
 
 def prompt_bool(question):
@@ -236,33 +179,6 @@ def prompt_bool(question):
             return True
         if answer in ('n', 'no'):
             return False
-
-
-
-
-def register_image(client, qcow2_path, name, owner, existing_image):
-    """
-    Register the given image with Glance.
-    """
-    image_meta = {'name': name,
-                  'is_public': True,
-                  'disk_format': 'qcow2',
-                  'min_disk': 0,
-                  'min_ram': 0,
-                  'owner': owner,
-                  'container_format': 'bare'}
-
-    if existing_image:
-        client.delete_image(existing_image['id'])
-
-    with open(qcow2_path) as ifile:
-        image_meta = client.add_image(image_meta, ifile)
-    image_id = image_meta['id']
-    logging.debug(" Added new image with ID: %s" % image_id)
-    logging.debug(" Returned the following metadata for the new image:")
-    for k, v in sorted(image_meta.items()):
-        logging.debug(" %(k)30s => %(v)s" % locals())
-    return image_id
 
 
 def create_options(parser):
