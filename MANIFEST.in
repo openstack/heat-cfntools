@@ -17,4 +17,5 @@ include heat_jeos/cfntools/cfn-hup
 include heat_jeos/cfntools/cfn-signal
 include heat_jeos/cfntools/cfn-get-metadata
 include heat_jeos/cfntools/cfn-push-stats
+include heat_jeos/cfntools/boto.cfg
 graft docs

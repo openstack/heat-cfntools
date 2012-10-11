@@ -94,6 +94,16 @@ def create_tdl(tdl, iso_path, cfn_dir):
             cfscript_e64 = base64.b64encode(f.read())
             f.close()
             elem.text = cfscript_e64
+    # cfn-push-stats requires boto.cfg, so we inject a template file
+    cfn_cfg = ['boto.cfg']
+    for cfnname in cfn_cfg:
+        cfnpath = "files/file[@name='/etc/%s']" % cfnname
+        elem = tdl_xml.find(cfnpath)
+        if elem is not None:
+            f = open('%s/%s' % (cfn_dir, cfnname), 'r')
+            cfscript_e64 = base64.b64encode(f.read())
+            f.close()
+            elem.text = cfscript_e64
     if iso_path:
         root = tdl_xml.getroot()
         ensure_xml_path(root, ['os', 'install', 'iso'])
