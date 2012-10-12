@@ -38,7 +38,10 @@ possible_topdir = os.path.normpath(os.path.join(os.path.abspath(sys.argv[0]),
 if os.path.exists(os.path.join(possible_topdir, 'heat_jeos')):
     sys.path.insert(0, possible_topdir)
 
-from heat_jeos import glance_clients as glance
+try:
+    from heat_jeos import glance_clients as glance
+except ImportError:
+    glance = None
 from heat_jeos.utils import *
 
 
@@ -99,6 +102,11 @@ def command_create(options, arguments):
         sys.exit(1)
 
     if options.register_with_glance:
+        if not glance:
+            logging.error("The Python Glance client is not installed. Please "
+                "install python-glance for Essex or python-glanceclient for "
+                "Folsom.")
+            sys.exit(1)
         try:
             client = glance.client(options)
             glance.get_image(client, 'test')
