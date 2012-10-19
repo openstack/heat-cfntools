@@ -87,7 +87,7 @@ def find_image_essex(client, image_name):
 
     Returns the image metadata or None if no image is found.
     """
-    images = client.get_images(name=image_name)
+    images = client.get_images(filters={'name': image_name})
     if images:
         return images[0]
     else:
