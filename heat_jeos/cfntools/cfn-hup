@@ -48,17 +48,22 @@ parser.add_argument('-v', '--verbose',
         required=False)
 args = parser.parse_args()
 
+# Setup logging
 log_format = '%(levelname)s [%(asctime)s] %(message)s'
+log_file_name = "/var/log/cfn-hup.log"
+logging.basicConfig(filename=log_file_name,
+                    format=log_format,
+                    level=logging.DEBUG)
 if args.verbose:
-    logging.basicConfig(format=log_format, level=logging.DEBUG)
+    logging.basicConfig(filename=log_file_name,
+                        format=log_format,
+                        level=logging.DEBUG)
 else:
-    logging.basicConfig(format=log_format, level=logging.INFO)
+    logging.basicConfig(filename=log_file_name,
+                        format=log_format,
+                        level=logging.INFO)
 
 LOG = logging.getLogger('cfntools')
-log_file_name = "/var/log/cfn-hup.log"
-file_handler = logging.FileHandler(log_file_name)
-file_handler.setFormatter(logging.Formatter(log_format))
-LOG.addHandler(file_handler)
 
 main_conf_path = '/etc/cfn/cfn-hup.conf'
 try:
