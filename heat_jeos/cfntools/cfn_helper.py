@@ -49,6 +49,7 @@ import subprocess
 import sys
 from urllib2 import urlopen, Request
 from urlparse import urlparse, urlunparse
+from boto.cloudformation import CloudFormationConnection
 
 
 LOG = logging.getLogger(__name__)
@@ -770,9 +771,10 @@ class ServicesHandler(object):
                 self._monitor_services(handler, service_entries)
 
 
-def metadata_server_url():
+def metadata_server_port():
     """
-    Return the url to the metadata server.
+    Return the the metadata server port
+    reads the :NNNN from the end of the URL in cfn-metadata-server
     """
     try:
         f = open("/var/lib/cloud/data/cfn-metadata-server")
@@ -780,7 +782,7 @@ def metadata_server_url():
         f.close()
         if not server_url[-1] == '/':
             server_url += '/'
-        return server_url
+        return int(server_url.split(':')[-1])
     except:
         return None
 
@@ -792,6 +794,7 @@ class MetadataServerConnectionError(Exception):
 class Metadata(object):
     _metadata = None
     _init_key = "AWS::CloudFormation::Init"
+    DEFAULT_PORT = 8000
 
     def __init__(self, stack, resource, access_key=None,
                  secret_key=None, credentials_file=None, region=None):
@@ -800,33 +803,45 @@ class Metadata(object):
         self.resource = resource
         self.access_key = access_key
         self.secret_key = secret_key
-        self.credentials_file = credentials_file
         self.region = region
+
+        if credentials_file:
+            credentials = parse_creds_file(credentials_file)
+            self.access_key = credentials['AWSAccessKeyId']
+            self.secret_key = credentials['AWSSecretKey']
+        elif access_key and secret_key:
+            self.access_key = access_key
+            self.secret_key = secret_key
+        else:
+            raise MetadataServerConnectionError("No credentials!")
+
+        self.port = metadata_server_port() or self.DEFAULT_PORT
+
+        self.client = CloudFormationConnection(
+                         aws_access_key_id=self.access_key,
+                         aws_secret_access_key=self.secret_key,
+                         is_secure=False, port=self.port, path="/v1", debug=1)
 
         # TODO(asalkeld) is this metadata for the local resource?
         self._is_local_metadata = True
         self._metadata = None
         self._has_changed = False
 
-    def metadata_resource_url(self):
-        server_url = metadata_server_url()
-        if not server_url:
-            return
-        return server_url + 'stacks/%s/resources/%s' % (self.stack,
-                                                        self.resource)
-
     def remote_metadata(self):
         """
         Connect to the metadata server and retreive the metadata from there.
         """
-        url = self.metadata_resource_url()
-        if not url:
-            raise MetadataServerConnectionError()
-
         try:
-            return urlopen(url).read()
+            res = self.client.describe_stack_resource(self.stack, self.resource)
+            # Note pending upstream patch will make this response a
+            # boto.cloudformation.stack.StackResourceDetail object
+            # which aligns better with all the existing calls
+            # see https://github.com/boto/boto/pull/857
+            resource_detail = res['DescribeStackResourceResponse'][
+                   'DescribeStackResourceResult']['StackResourceDetail']
+            return resource_detail['Metadata']
         except:
-            raise MetadataServerConnectionError()
+            raise MetadataServerConnectionError("Error getting remote metadata")
 
     def retrieve(self, meta_str=None):
         """
