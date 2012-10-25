@@ -877,7 +877,9 @@ class Metadata(object):
             self._has_changed = True
 
         # save current metadata to file
-        with open('/tmp/last_metadata', 'w+') as cf:
+        tmp_mdpath='/tmp/last_metadata'
+        with open(tmp_mdpath, 'w+') as cf:
+            os.chmod(tmp_mdpath, 0600)
             cf.write(json.dumps(self._metadata))
 
     def __str__(self):
