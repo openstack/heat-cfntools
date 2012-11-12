@@ -45,6 +45,5 @@ cd /home/builder/crankcase/build ; rake build
     <file name='/opt/aws/bin/cfn_helper.py'  type='base64'></file>
     <file name='/opt/aws/bin/cfn-get-metadata'  type='base64'></file>
     <file name='/opt/aws/bin/cfn-push-stats'  type='base64'></file>
-    <file name='/etc/boto.cfg'  type='base64'></file>
   </files>
 </template>
