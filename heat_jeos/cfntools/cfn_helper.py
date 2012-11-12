@@ -49,6 +49,10 @@ import subprocess
 import sys
 from urllib2 import urlopen, Request
 from urlparse import urlparse, urlunparse
+
+# Override BOTO_CONFIG, which makes boto look only at the specified
+# config file, instead of the default locations
+os.environ['BOTO_CONFIG'] = '/var/lib/cloud/data/cfn-boto-cfg'
 from boto.cloudformation import CloudFormationConnection
 
 

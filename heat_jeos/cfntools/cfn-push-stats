@@ -21,6 +21,10 @@ import os
 import subprocess
 import random
 import sys
+
+# Override BOTO_CONFIG, which makes boto look only at the specified
+# config file, instead of the default locations
+os.environ['BOTO_CONFIG'] = '/var/lib/cloud/data/cfn-boto-cfg'
 from boto.ec2.cloudwatch import CloudWatchConnection
 
 
@@ -221,10 +225,8 @@ def parse_haproxy_unix_socket(res):
 
 def send_stats(info):
 
-    # Get a client boto connection, we use the settings and credentials
-    # from /etc/boto.cfg which is deployed as part of instance configuration
-    # hence pass None/None here.  We do need the hard-coded port/path as boto
-    # can't read these from config values
+    # Create boto connection, need the hard-coded port/path as boto
+    # can't read these from config values in BOTO_CONFIG
     # FIXME : currently only http due to is_secure=False
     client = CloudWatchConnection(
              aws_access_key_id=credentials['AWSAccessKeyId'],
