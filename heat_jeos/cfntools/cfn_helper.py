@@ -808,23 +808,9 @@ class Metadata(object):
         self.access_key = access_key
         self.secret_key = secret_key
         self.region = region
-
-        if credentials_file:
-            credentials = parse_creds_file(credentials_file)
-            self.access_key = credentials['AWSAccessKeyId']
-            self.secret_key = credentials['AWSSecretKey']
-        elif access_key and secret_key:
-            self.access_key = access_key
-            self.secret_key = secret_key
-        else:
-            raise MetadataServerConnectionError("No credentials!")
-
-        self.port = metadata_server_port() or self.DEFAULT_PORT
-
-        self.client = CloudFormationConnection(
-                         aws_access_key_id=self.access_key,
-                         aws_secret_access_key=self.secret_key,
-                         is_secure=False, port=self.port, path="/v1", debug=1)
+        self.credentials_file = credentials_file
+        self.access_key = access_key
+        self.secret_key = secret_key
 
         # TODO(asalkeld) is this metadata for the local resource?
         self._is_local_metadata = True
@@ -835,8 +821,26 @@ class Metadata(object):
         """
         Connect to the metadata server and retreive the metadata from there.
         """
+
+        if self.credentials_file:
+            credentials = parse_creds_file(self.credentials_file)
+            access_key = credentials['AWSAccessKeyId']
+            secret_key = credentials['AWSSecretKey']
+        elif self.access_key and self.secret_key:
+            access_key = self.access_key
+            secret_key = self.secret_key
+        else:
+            raise MetadataServerConnectionError("No credentials!")
+
+        port = metadata_server_port() or self.DEFAULT_PORT
+
+        client = CloudFormationConnection(
+                         aws_access_key_id=access_key,
+                         aws_secret_access_key=secret_key,
+                         is_secure=False, port=port, path="/v1", debug=1)
+
         try:
-            res = self.client.describe_stack_resource(self.stack, self.resource)
+            res = client.describe_stack_resource(self.stack, self.resource)
             # Note pending upstream patch will make this response a
             # boto.cloudformation.stack.StackResourceDetail object
             # which aligns better with all the existing calls
@@ -856,10 +860,37 @@ class Metadata(object):
         else:
             try:
                 self._data = self.remote_metadata()
-            except MetadataServerConnectionError:
-                f = open("/var/lib/cloud/data/cfn-init-data")
-                self._data = f.read()
-                f.close()
+            except MetadataServerConnectionError as ex:
+                LOG.warn("Unable to retrieve remote metadata : %s" % str(ex))
+
+                # If reading remote metadata fails, we fall-back on local files
+                # in order to get the most up-to-date version, we try:
+                # /tmp/last_metadata, followed by
+                # /var/lib/cloud/data/cfn-init-data
+                # This should allow us to do the right thing both during the
+                # first cfn-init run (when we only have cfn-init-data), and
+                # in the event of a temporary interruption to connectivity
+                # affecting cfn-hup, in which case we want to use last_metadata
+                # or the logic below could re-run a stale cfn-init-data
+                fd = None
+                for filepath in ['/tmp/last_metadata',
+                                 '/var/lib/cloud/data/cfn-init-data']:
+                    try:
+                        fd = open(filepath)
+                    except IOError:
+                        LOG.warn("Unable to open local metadata : %s" %
+                                 filepath)
+                        continue
+                    else:
+                        LOG.info("Opened local metadata %s" % filepath)
+                        break
+
+                if fd:
+                    self._data = fd.read()
+                    fd.close()
+                else:
+                    LOG.error("Unable to read any valid metadata!")
+                    return
 
         if isinstance(self._data, str):
             self._metadata = json.loads(self._data)
