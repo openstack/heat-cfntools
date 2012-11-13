@@ -837,7 +837,7 @@ class Metadata(object):
         client = CloudFormationConnection(
                          aws_access_key_id=access_key,
                          aws_secret_access_key=secret_key,
-                         is_secure=False, port=port, path="/v1", debug=1)
+                         is_secure=False, port=port, path="/v1", debug=0)
 
         try:
             res = client.describe_stack_resource(self.stack, self.resource)
