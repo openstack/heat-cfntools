@@ -198,6 +198,9 @@ class CommandRunner(object):
         self._status = subproc.returncode
         self._stdout = output[0]
         self._stderr = output[1]
+        if self._status:
+            LOG.debug("Return code of %d after executing: '%s'" % \
+                (self._status, cmd))
         if self._next:
             self._next.run()
         return self
@@ -491,7 +494,7 @@ class PackagesHandler(object):
         cmd_str = 'apt-get -y install %s' % pkg_list
         CommandRunner(cmd_str).run()
 
-    # map of function pionters to handle different package managers
+    # map of function pointers to handle different package managers
     _package_handlers = {
             "yum": _handle_yum_packages,
             "rpm": _handle_rpm_packages,
