@@ -86,7 +86,7 @@ body = {
     "Data" : args.data
 }
 
-cmd_str = "curl -X PUT -H \'Content-Type:\' --data-binary \'%s\' %s" % \
+cmd_str = "curl -X PUT -H \'Content-Type:\' --data-binary \'%s\' \"%s\"" % \
            (json.dumps(body), args.url)
 command = CommandRunner(cmd_str).run()
 sys.exit(command.status)
