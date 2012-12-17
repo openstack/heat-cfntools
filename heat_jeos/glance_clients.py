@@ -68,6 +68,11 @@ def get_glance_client_folsom(options):
     kc = keystoneclient.v2_0.client.Client(**creds)
     glance_url = kc.service_catalog.url_for(service_type='image',
                                             endpoint_type='publicURL')
+
+    version_string = '/v1'
+    if glance_url.endswith(version_string):
+        glance_url = glance_url[:-len(version_string)]
+
     auth_token = kc.auth_token
     client = GlanceClient(1, glance_url, token=auth_token)
     return client
@@ -96,10 +101,7 @@ def find_image_essex(client, image_name):
 
 def find_image_folsom(client, image_name):
     images = client.images.list(filters={'name': image_name})
-    try:
-        return images.next()
-    except StopIteration:
-        return None
+    return next(images, None)
 
 
 def delete_image_essex(client, image):
