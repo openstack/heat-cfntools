@@ -13,17 +13,19 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import gettext
 import os
-import subprocess
-
 import setuptools
 
+
+def read(fname):
+    return open(os.path.join(os.path.dirname(__file__), fname)).read()
+
 setuptools.setup(
-    name='heat-jeos',
-    version='7',
-    description='The heat-jeos project provides services for creating '
-                '(J)ust (E)nough (O)perating (S)ystem images',
+    name='heat-cfntools',
+    version='1.0',
+    description='Tools required to be installed on Heat '
+        'provisioned cloud instances',
+    long_description=read('README.rst'),
     license='Apache License (2.0)',
     author='Heat API Developers',
     author_email='discuss@heat-api.org',
@@ -37,5 +39,10 @@ setuptools.setup(
         'Programming Language :: Python :: 2.6',
         'Environment :: No Input/Output (Daemon)',
     ],
-    scripts=['bin/heat-jeos'],
+    scripts=[
+        'bin/cfn-get-metadata',
+        'bin/cfn-hup',
+        'bin/cfn-init',
+        'bin/cfn-push-stats',
+        'bin/cfn-signal'],
     py_modules=[])

@@ -1,23 +1,20 @@
-====
-HEAT
-====
+=========================
+Heat CloudFormation Tools
+=========================
 
-This is a project for creating JEOS images for heat.
+There are several bootstrap methods for cloudformations:
+1. Create image with application ready to go
+2. Use cloud-init to run a startup script passed as userdata to the nova
+   server create
+3. Use the CloudFormation instance helper scripts
 
-This project supports the following features:
-Creates TDL files for use with oz
-Creates compressed qcow2 files for use with libvirt/glance
-Registers image files with glance
+This package contains files required for choice #3.
 
-Getting Started
------------
-
-If you'd like to run from the master branch, you can clone the git repo:
-
-    git clone git@github.com:heat-api/heat.git
-
-Follow the steps:
-https://github.com/heat-api/heat/wiki/HeatGettingStarted
+cfn-init   - Reads the AWS::CloudFormation::Init for the instance resource,
+             installs packages, and starts services
+cfn-signal - Waits for an application to be ready before continuing, ie:
+             supporting the WaitCondition feature
+cfn-hup    - Handle updates from the UpdateStack CloudFormation API call
 
 Related projects
 ----------------
