@@ -6,8 +6,8 @@
     <arch>x86_64</arch>
     <install type="iso">
       <iso>http://download.fedoraproject.org/pub/fedora/linux/releases/17/Fedora/x86_64/iso/Fedora-17-x86_64-DVD.iso</iso>
-      <sha256sum>c05d7d10e17d49057c714ae0f08d442d3bde47dd28db587cfc5c4ce310ccd705</sha256sum>
     </install>
+    <rootpw>foo</rootpw>
   </os>
   <description>Fedora 17</description>
   <packages>
@@ -21,7 +21,8 @@
 /usr/sbin/useradd ec2-user
 echo -e 'ec2-user\tALL=(ALL)\tNOPASSWD: ALL' >> /etc/sudoers
     </command>
-    <command name="oneshot" type="raw">
+    <command name="packages" type="raw">
+yum -y update
 sed --in-place -e s/Type=oneshot/"Type=oneshot\nTimeoutSec=0"/ /lib/systemd/system/cloud-final.service
     </command>
   </commands>
