@@ -2,11 +2,4 @@
 *.swp
 build
 dist
-heat_jeos.egg-info/
-heat/vcsversion.py
-tags
-*.log
-heat-test.db
-.venv
-AUTHORS
-ChangeLog
+heat_cfntools.egg-info/
