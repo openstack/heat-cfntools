@@ -41,11 +41,7 @@ except ImportError:
     LOG.warn("psutil not available. If you want process and memory "
             "statistics, you need to install it.")
 
-if os.path.exists('/opt/aws/bin'):
-    sys.path.insert(0, '/opt/aws/bin')
-    from cfn_helper import *
-else:
-    from heat_cfntools.cfntools.cfn_helper import *
+from heat_cfntools.cfntools.cfn_helper import *
 
 KILO = 1024
 MEGA = 1048576
