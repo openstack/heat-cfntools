@@ -94,6 +94,7 @@ def command_create(options, arguments):
     """
     tdl_path = None
     auto = None
+    auto_file = None
     if len(arguments) == 0:
         tdl_path = options.template_file
     elif len(arguments) == 1:
@@ -165,10 +166,10 @@ def command_create(options, arguments):
         logging.info('Creating JEOS image (%s) - '
                      'this takes approximately 10 minutes.' % image_name)
         build_jeos(get_oz_guest(final_tdl, auto))
-        if auto_file.name:
+        if auto_file is not None and auto_file.name:
             try:
                 os.remove(auto_file.name)
-            except:
+            except IOError:
                 logging.error("Removing temp auto file failed")
         print('\nGenerated image: %s' % qcow2_path)
 
