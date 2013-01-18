@@ -41,13 +41,13 @@ def find_template_by_name(template_dir, template_name):
         if name == template_name:
             return template_path
 
-def get_oz_guest(tdl_xml):
+def get_oz_guest(tdl_xml, auto=None):
     """
     Returns Oz Guest instance based on the passed template.
     """
     tdl = oz.TDL.TDL(tdl_xml)
     config = ozutil.parse_config(None)
-    return oz.GuestFactory.guest_factory(tdl, config, None, None)
+    return oz.GuestFactory.guest_factory(tdl, config, auto, None)
 
 
 def build_image_from_tdl(tdl_xml):

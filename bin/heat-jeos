@@ -27,6 +27,9 @@ import os.path
 import sys
 import time
 import traceback
+from urlparse import urlparse
+import httplib
+import tempfile
 
 from prettytable import PrettyTable
 
@@ -80,6 +83,8 @@ def command_create(options, arguments):
     --template-file=FILE    Path to the template file to use
     --iso=FILE              Path to the ISO file to use as the base OS image
     --register-with-glance  Register the image with Glance after it's built
+    --auto-file=LOCATION    Path or URL to auto install, usefull if you want
+                            to pass a custom kickstart/preseed/sif
 
     The command must be run as root in order for libvirt to have permissions
     to create virtual machines and read the raw DVDs.
@@ -88,6 +93,8 @@ def command_create(options, arguments):
     `/template/os/install/iso` section or passed using the `--iso` argument.
     """
     tdl_path = None
+    auto = None
+    auto_file = None
     if len(arguments) == 0:
         tdl_path = options.template_file
     elif len(arguments) == 1:
@@ -100,6 +107,28 @@ def command_create(options, arguments):
     if os.geteuid() != 0:
         logging.error("This command must be run as root")
         sys.exit(1)
+
+    if options.auto:
+        logging.debug("Getting auto install file")
+        autourl = urlparse(options.auto)
+        if autourl.scheme == "http" or autourl.scheme == "https":
+            logging.debug("Getting autofile from webserver")
+            try:
+                conn = httplib.HTTPConnection(autourl.netloc)
+                conn.request("GET", autourl.path)
+                response = conn.getresponse()
+                auto_content = response.read()
+                conn.close()
+                with tempfile.NamedTemporaryFile(delete=False) as auto_file:
+                    auto_file.write(auto_content)
+                    auto_file.close()
+                    auto = auto_file.name
+            except Exception, e:
+                logging.error("Getting the autofile from the webserver failed:")
+                logging.error(e)
+                sys.exit(1)
+        if autourl.scheme == "":
+            auto = autourl.path
 
     if options.register_with_glance:
         if not glance:
@@ -123,7 +152,7 @@ def command_create(options, arguments):
 
     with open(tdl_path, 'r') as f:
         tdl_xml = f.read()
-    oz_guest = get_oz_guest(tdl_xml)
+    oz_guest = get_oz_guest(tdl_xml, auto)
     dsk_path, qcow2_path, image_name = target_image_paths(oz_guest)
 
     should_build_jeos = True
@@ -136,7 +165,12 @@ def command_create(options, arguments):
 
         logging.info('Creating JEOS image (%s) - '
                      'this takes approximately 10 minutes.' % image_name)
-        build_jeos(get_oz_guest(final_tdl))
+        build_jeos(get_oz_guest(final_tdl, auto))
+        if auto_file is not None and auto_file.name:
+            try:
+                os.remove(auto_file.name)
+            except IOError:
+                logging.error("Removing temp auto file failed")
         print('\nGenerated image: %s' % qcow2_path)
 
         if not options.register_with_glance:
@@ -202,6 +236,9 @@ def create_options(parser):
     parser.add_option('-j', '--jeos-dir',
                       default=DEFAULT_JEOS_DIR,
                       help="Path to the JEOS templates directory")
+    parser.add_option('-a', '--auto-file', dest="auto",
+                      default=False,
+                      help="Path or url to auto file e.g. kickstart/preseed")
     parser.add_option('-c', '--cfn-dir',
                       default=DEFAULT_CFNTOOLS_DIR,
                       help="Path to cfntools directory")
