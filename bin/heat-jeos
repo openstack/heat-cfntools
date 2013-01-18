@@ -108,7 +108,7 @@ def command_create(options, arguments):
         sys.exit(1)
 
     if options.auto:
-	logging.debug("Getting auto install file")
+        logging.debug("Getting auto install file")
     autourl = urlparse(options.auto)
     if autourl.scheme == "http" or autourl.scheme == "https":
             logging.debug("Getting autofile from webserver")
