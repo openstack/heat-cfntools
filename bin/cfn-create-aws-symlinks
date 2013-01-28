@@ -1,0 +1,72 @@
+#!/usr/bin/env python
+#
+#    Licensed under the Apache License, Version 2.0 (the "License"); you may
+#    not use this file except in compliance with the License. You may obtain
+#    a copy of the License at
+#
+#         http://www.apache.org/licenses/LICENSE-2.0
+#
+#    Unless required by applicable law or agreed to in writing, software
+#    distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+#    WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+#    License for the specific language governing permissions and limitations
+#    under the License.
+
+"""
+Creates symlinks for the cfn-* scripts in this directory to /opt/aws/bin
+"""
+import argparse
+import glob
+import os
+import os.path
+
+
+def create_symlink(source_file, target_file, override=False):
+    if os.path.exists(target_file):
+        if (override):
+            os.remove(target_file)
+        else:
+            print '%s already exists, will not replace with symlink' % target_file
+            return
+    print '%s -> %s' % (source_file, target_file)
+    os.symlink(source_file, target_file)
+
+description = 'Creates symlinks for the cfn-* scripts in this directory to /opt/aws/bin'
+parser = argparse.ArgumentParser(description=description)
+parser.add_argument(
+    '-t', '--target',
+    dest="target_dir",
+    help="Target directory to create symlinks",
+    default='/opt/aws/bin',
+    required=False)
+parser.add_argument(
+    '-s', '--source',
+    dest="source_dir",
+    help="Source directory to create symlinks from. Defaults to the directory where this script is",
+    default='/usr/bin',
+    required=False)
+parser.add_argument(
+    '-f', '--force',
+    dest="force",
+    action='store_true',
+    help="If specified, will create symlinks even if they already exist",
+    required=False)
+args = parser.parse_args()
+
+print '%s -> %s' % (args.source_dir, args.target_dir)
+
+if args.source_dir == args.target_dir:
+    print 'This script is already being run from %s' % args.target_dir
+    exit(1)
+
+if not os.path.exists(args.target_dir):
+    try:
+        os.makedirs(args.target_dir)
+    except OSError as exc:
+        print 'Could not create target directory %s: %s' % (args.target_dir, exc)
+        exit(1)
+
+source_files = glob.glob(args.source_dir + '/cfn-*')
+for source_file in source_files:
+    target_file = args.target_dir + '/' + os.path.basename(source_file)
+    create_symlink(source_file, target_file, override=args.force)
