@@ -31,42 +31,51 @@ def create_symlink(source_file, target_file, override=False):
     print '%s -> %s' % (source_file, target_file)
     os.symlink(source_file, target_file)
 
-description = 'Creates symlinks for the cfn-* scripts in this directory to /opt/aws/bin'
-parser = argparse.ArgumentParser(description=description)
-parser.add_argument(
-    '-t', '--target',
-    dest="target_dir",
-    help="Target directory to create symlinks",
-    default='/opt/aws/bin',
-    required=False)
-parser.add_argument(
-    '-s', '--source',
-    dest="source_dir",
-    help="Source directory to create symlinks from. Defaults to the directory where this script is",
-    default='/usr/bin',
-    required=False)
-parser.add_argument(
-    '-f', '--force',
-    dest="force",
-    action='store_true',
-    help="If specified, will create symlinks even if they already exist",
-    required=False)
-args = parser.parse_args()
+def check_dirs(source_dir, target_dir):
+    print '%s -> %s' % (source_dir, target_dir)
+    
+    if source_dir == target_dir:
+        print 'Source and target are the same %s' % target_dir
+        return False
+    
+    if not os.path.exists(target_dir):
+        try:
+            os.makedirs(target_dir)
+        except OSError as exc:
+            print 'Could not create target directory %s: %s' % (target_dir, exc)
+            return False
+    return True
 
-print '%s -> %s' % (args.source_dir, args.target_dir)
+def create_symlinks(source_dir, target_dir, glob_pattern, override):
+    source_files = glob.glob(os.path.join(source_dir, glob_pattern))
+    for source_file in source_files:
+        target_file = os.path.join(target_dir, os.path.basename(source_file))
+        create_symlink(source_file, target_file, override=override)
 
-if args.source_dir == args.target_dir:
-    print 'This script is already being run from %s' % args.target_dir
-    exit(1)
+if __name__ == '__main__':
+    description = 'Creates symlinks for the cfn-* scripts in this directory to /opt/aws/bin'
+    parser = argparse.ArgumentParser(description=description)
+    parser.add_argument(
+        '-t', '--target',
+        dest="target_dir",
+        help="Target directory to create symlinks",
+        default='/opt/aws/bin',
+        required=False)
+    parser.add_argument(
+        '-s', '--source',
+        dest="source_dir",
+        help="Source directory to create symlinks from. Defaults to the directory where this script is",
+        default='/usr/bin',
+        required=False)
+    parser.add_argument(
+        '-f', '--force',
+        dest="force",
+        action='store_true',
+        help="If specified, will create symlinks even if they already exist",
+        required=False)
+    args = parser.parse_args()
 
-if not os.path.exists(args.target_dir):
-    try:
-        os.makedirs(args.target_dir)
-    except OSError as exc:
-        print 'Could not create target directory %s: %s' % (args.target_dir, exc)
+    if not check_dirs(args.source_dir, args.target_dir):
         exit(1)
 
-source_files = glob.glob(args.source_dir + '/cfn-*')
-for source_file in source_files:
-    target_file = args.target_dir + '/' + os.path.basename(source_file)
-    create_symlink(source_file, target_file, override=args.force)
+    create_symlinks(args.source_dir, args.target_dir, 'cfn-*', args.force)
