@@ -44,5 +44,6 @@ setuptools.setup(
         'bin/cfn-hup',
         'bin/cfn-init',
         'bin/cfn-push-stats',
-        'bin/cfn-signal'],
+        'bin/cfn-signal',
+        'bin/cfn-create-aws-symlinks'],
     py_modules=[])
