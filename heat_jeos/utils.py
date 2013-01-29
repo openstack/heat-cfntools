@@ -121,7 +121,10 @@ def build_jeos(guest):
         force_download = False
         guest.generate_install_media(force_download)
         try:
-            guest.generate_diskimage(force=force_download)
+            if hasattr(guest, 'disksize'):
+                guest.generate_diskimage(force=force_download, size=guest.disksize)
+            else:
+                guest.generate_diskimage(force=force_download)
             libvirt_xml = guest.install(50000, force_download)
         except:
             guest.cleanup_old_guest()
