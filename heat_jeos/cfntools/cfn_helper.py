@@ -14,17 +14,7 @@
 """
 Implements cfn metadata handling
 
-Resource metadata currently implemented:
-    * config/packages
-    * config/services
-
 Not implemented yet:
-    * config sets
-    * config/sources
-    * config/commands
-    * config/files
-    * config/users
-    * config/groups
     * command line args
       - placeholders are ignored
 """
@@ -778,6 +768,54 @@ class ServicesHandler(object):
                 self._monitor_services(handler, service_entries)
 
 
+class ConfigsetsHandler(object):
+
+    def __init__(self, configsets, selectedsets):
+        self.configsets = configsets
+        self.selectedsets = selectedsets
+
+    def expand_sets(self, list, executionlist):
+        for elem in list:
+            if isinstance(elem, dict):
+                dictkeys = elem.keys()
+                if len(dictkeys) != 1 or dictkeys.pop() != 'ConfigSet':
+                    raise Exception('invalid ConfigSets metadata')
+                dictkey = elem.values().pop()
+                try:
+                    self.expand_sets(self.configsets[dictkey], executionlist)
+                except KeyError:
+                    raise Exception("Undefined ConfigSet '%s' referenced"
+                                    % dictkey)
+            else:
+                executionlist.append(elem)
+
+    def get_configsets(self):
+        """
+        Returns a list of Configsets to execute in template
+        """
+        if not self.configsets:
+            if self.selectedsets:
+                raise Exception('Template has no configSets')
+            return
+        if not self.selectedsets:
+            if 'default' not in self.configsets:
+                raise Exception('Template has no default configSet, must'
+                                ' specify')
+            self.selectedsets = 'default'
+
+        selectedlist = [x.strip() for x in self.selectedsets.split(',')]
+        executionlist = []
+        for item in selectedlist:
+            if item not in self.configsets:
+                raise Exception("Requested configSet '%s' not in configSets"
+                                " section" % item)
+            self.expand_sets(self.configsets[item], executionlist)
+        if not executionlist:
+            raise Exception("Requested configSet %s empty?" % self.selectedsets)
+
+        return executionlist
+
+
 def metadata_server_port():
     """
     Return the the metadata server port
@@ -979,7 +1017,8 @@ class Metadata(object):
     DEFAULT_PORT = 8000
 
     def __init__(self, stack, resource, access_key=None,
-                 secret_key=None, credentials_file=None, region=None):
+                 secret_key=None, credentials_file=None, region=None,
+                 configsets=None):
 
         self.stack = stack
         self.resource = resource
@@ -989,6 +1028,7 @@ class Metadata(object):
         self.credentials_file = credentials_file
         self.access_key = access_key
         self.secret_key = secret_key
+        self.configsets = configsets
 
         # TODO(asalkeld) is this metadata for the local resource?
         self._is_local_metadata = True
@@ -1110,7 +1150,7 @@ class Metadata(object):
             self._metadata = self._metadata[self._init_key]
         return is_valid
 
-    def _process_config(self):
+    def _process_config(self, config="config"):
         """
         Parse and process a config section
           * packages
@@ -1122,7 +1162,11 @@ class Metadata(object):
           * services
         """
 
-        self._config = self._metadata["config"]
+        try:
+            self._config = self._metadata[config]
+        except KeyError:
+            raise Exception("Could not find '%s' set in template, may need to"
+                            " specify another set." % config)
         PackagesHandler(self._config.get("packages")).apply_packages()
         SourcesHandler(self._config.get("sources")).apply_sources()
         GroupsHandler(self._config.get("groups")).apply_groups()
@@ -1135,13 +1179,16 @@ class Metadata(object):
         """
         Process the resource metadata
         """
-        # FIXME: when config sets are implemented, this should select the
-        # correct config set from the metadata, and send each config in the
-        # config set to process_config
         if not self._is_valid_metadata():
             raise Exception("invalid metadata")
         else:
-            self._process_config()
+            executionlist = ConfigsetsHandler(self._metadata.get("configSets"),
+                                              self.configsets).get_configsets()
+            if not executionlist:
+                self._process_config()
+            else:
+                for item in executionlist:
+                    self._process_config(item)
 
     def cfn_hup(self, hooks):
         """
