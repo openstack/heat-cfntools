@@ -849,8 +849,8 @@ class CommandsHandler(object):
                                      self.commands[command_label])
 
     def _initialize_command(self, command_label, properties):
-        command_status = ''
-        cwd = ''
+        command_status = None
+        cwd = None
         env = properties.get("env", None)
 
         if "test" in properties:
@@ -915,7 +915,6 @@ class GroupsHandler(object):
             self._initialize_group(group, properties)
 
     def _initialize_group(self, group, properties):
-        command_status = ''
         gid = properties.get("gid", None)
 
         param_list = []
@@ -962,7 +961,6 @@ class UsersHandler(object):
             self._initialize_user(user, properties)
 
     def _initialize_user(self, user, properties):
-        command_status = ''
         uid = properties.get("uid", None)
         homeDir = properties.get("homeDir", None)
 
