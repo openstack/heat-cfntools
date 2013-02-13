@@ -45,6 +45,10 @@ parser.add_argument('--region',
         dest="region",
         help="Openstack region",
         required=False)
+parser.add_argument('-c', '--configsets',
+        dest="configsets",
+        help="An optional list of configSets (default: default)",
+        required=False)
 args = parser.parse_args()
 
 log_format = '%(levelname)s [%(asctime)s] %(message)s'
@@ -60,7 +64,8 @@ metadata = Metadata(args.stack_name,
                     args.logical_resource_id,
                     access_key=args.access_key,
                     secret_key=args.secret_key,
-                    region=args.region)
+                    region=args.region,
+                    configsets=args.configsets)
 metadata.retrieve()
 try:
     metadata.cfn_init()

@@ -14,17 +14,7 @@
 """
 Implements cfn metadata handling
 
-Resource metadata currently implemented:
-    * config/packages
-    * config/services
-
 Not implemented yet:
-    * config sets
-    * config/sources
-    * config/commands
-    * config/files
-    * config/users
-    * config/groups
     * command line args
       - placeholders are ignored
 """
@@ -63,6 +53,7 @@ def to_boolean(b):
     val = b.lower().strip() if isinstance(b, basestring) else b
     return val in [True, 'true', 'yes', '1', 1]
 
+
 def parse_creds_file(path='/etc/cfn/cfn-credentials'):
     '''
     Parse the cfn credentials file
@@ -77,6 +68,7 @@ def parse_creds_file(path='/etc/cfn/cfn-credentials'):
             if match:
                 creds[key] = match.group(1)
     return creds
+
 
 class HupConfig(object):
     def __init__(self, fp_list):
@@ -148,7 +140,7 @@ class Hook(object):
             CommandRunner(self.action).run(user=self.runas)
         else:
             LOG.debug('event: {%s, %s, %s} did not match %s' %
-                          (ev_name, ev_object, ev_resource, self.__str__()))
+                      (ev_name, ev_object, ev_resource, self.__str__()))
 
     def __str__(self):
         return '{%s, %s, %s, %s, %s}' % \
@@ -182,7 +174,7 @@ class CommandRunner(object):
             s += "\n\tstderr: %s" % self._stderr
         return s
 
-    def run(self, user='root'):
+    def run(self, user='root', cwd=None, env=None):
         """
         Run the Command and return the output.
 
@@ -192,7 +184,7 @@ class CommandRunner(object):
         LOG.debug("Running command: %s" % self._command)
         cmd = ['su', user, '-c', self._command]
         subproc = subprocess.Popen(cmd, stdout=subprocess.PIPE,
-                                   stderr=subprocess.PIPE)
+                                   stderr=subprocess.PIPE, cwd=cwd, env=env)
         output = subproc.communicate()
 
         self._status = subproc.returncode
@@ -200,7 +192,7 @@ class CommandRunner(object):
         self._stderr = output[1]
         if self._status:
             LOG.debug("Return code of %d after executing: '%s'" % \
-                (self._status, cmd))
+                      (self._status, cmd))
         if self._next:
             self._next.run()
         return self
@@ -266,7 +258,7 @@ class RpmHelper(object):
             if isinstance(versions, basestring):
                 return versions
             versions = sorted(versions, rpmutils.compareVerOnly,
-                    reverse=True)
+                              reverse=True)
             return versions[0]
         else:
             return None
@@ -495,13 +487,11 @@ class PackagesHandler(object):
         CommandRunner(cmd_str).run()
 
     # map of function pointers to handle different package managers
-    _package_handlers = {
-            "yum": _handle_yum_packages,
-            "rpm": _handle_rpm_packages,
-            "apt": _handle_apt_packages,
-            "rubygems": _handle_gem_packages,
-            "python": _handle_python_packages
-    }
+    _package_handlers = {"yum": _handle_yum_packages,
+                         "rpm": _handle_rpm_packages,
+                         "apt": _handle_apt_packages,
+                         "rubygems": _handle_gem_packages,
+                         "python": _handle_python_packages}
 
     def _package_handler(self, manager_name):
         handler = None
@@ -725,7 +715,7 @@ class ServicesHandler(object):
                 start_cmd = handler(self, service, "start")
                 if start_cmd.status != 0:
                     LOG.warning('Service %s did not start. STDERR: %s' %
-                                    (service, start_cmd.stderr))
+                               (service, start_cmd.stderr))
                     return
                 for h in self.hooks:
                     self.hooks[h].event('service.restarted',
@@ -778,6 +768,54 @@ class ServicesHandler(object):
                 self._monitor_services(handler, service_entries)
 
 
+class ConfigsetsHandler(object):
+
+    def __init__(self, configsets, selectedsets):
+        self.configsets = configsets
+        self.selectedsets = selectedsets
+
+    def expand_sets(self, list, executionlist):
+        for elem in list:
+            if isinstance(elem, dict):
+                dictkeys = elem.keys()
+                if len(dictkeys) != 1 or dictkeys.pop() != 'ConfigSet':
+                    raise Exception('invalid ConfigSets metadata')
+                dictkey = elem.values().pop()
+                try:
+                    self.expand_sets(self.configsets[dictkey], executionlist)
+                except KeyError:
+                    raise Exception("Undefined ConfigSet '%s' referenced"
+                                    % dictkey)
+            else:
+                executionlist.append(elem)
+
+    def get_configsets(self):
+        """
+        Returns a list of Configsets to execute in template
+        """
+        if not self.configsets:
+            if self.selectedsets:
+                raise Exception('Template has no configSets')
+            return
+        if not self.selectedsets:
+            if 'default' not in self.configsets:
+                raise Exception('Template has no default configSet, must'
+                                ' specify')
+            self.selectedsets = 'default'
+
+        selectedlist = [x.strip() for x in self.selectedsets.split(',')]
+        executionlist = []
+        for item in selectedlist:
+            if item not in self.configsets:
+                raise Exception("Requested configSet '%s' not in configSets"
+                                " section" % item)
+            self.expand_sets(self.configsets[item], executionlist)
+        if not executionlist:
+            raise Exception("Requested configSet %s empty?" % self.selectedsets)
+
+        return executionlist
+
+
 def metadata_server_port():
     """
     Return the the metadata server port
@@ -794,6 +832,179 @@ def metadata_server_port():
         return None
 
 
+class CommandsHandler(object):
+
+    def __init__(self, commands):
+        self.commands = commands
+
+    def apply_commands(self):
+        """
+        Execute commands on the instance in alphabetical order by name.
+        """
+        if not self.commands:
+            return
+        for command_label in sorted(self.commands):
+            LOG.debug("%s is being processed" % command_label)
+            self._initialize_command(command_label,
+                                     self.commands[command_label])
+
+    def _initialize_command(self, command_label, properties):
+        command_status = None
+        cwd = None
+        env = properties.get("env", None)
+
+        if "test" in properties:
+            test_status = CommandRunner(properties["test"]).run().status
+            if test_status != 0:
+                LOG.info("%s test returns false, skipping command"
+                         % command_label)
+                return
+            else:
+                LOG.debug("%s test returns true, proceeding" % command_label)
+
+        if "cwd" in properties:
+            cwd = os.path.expanduser(properties["cwd"])
+            if not os.path.exists(cwd):
+                LOG.error("%s has failed. " % command_label +
+                          "%s path does not exist" % cwd)
+                return
+
+        if "command" in properties:
+            try:
+                # TODO(pfreund) aws doc : "Either an array or a string
+                # specifying the command to run" Need the array.
+                command = CommandRunner(properties["command"])
+                command.run('root', cwd, env)
+                command_status = command.status
+            except OSError as e:
+                if e.errno == errno.EEXIST:
+                    LOG.debug(str(e))
+                else:
+                    LOG.exception(e)
+        else:
+            LOG.error("%s has failed. " % command_label
+                      + "'command' property missing")
+            return
+
+        if command_status == 0:
+            LOG.info("%s has been successfully executed" % command_label)
+        else:
+            if "ignoreErrors" in properties:
+                if properties["ignoreErrors"] == "false":
+                    LOG.error("%s has failed. Not ignoring" % command_label)
+                else:
+                    LOG.info("%s has failed. Explicit ignoring"
+                             % command_label)
+            else:
+                LOG.error("%s has failed." % command_label)
+
+
+class GroupsHandler(object):
+
+    def __init__(self, groups):
+        self.groups = groups
+
+    def apply_groups(self):
+        """
+        Create Linux/UNIX groups and assign group IDs
+        """
+        if not self.groups:
+            return
+        for group, properties in self.groups.iteritems():
+            LOG.debug("%s group is being created" % group)
+            self._initialize_group(group, properties)
+
+    def _initialize_group(self, group, properties):
+        gid = properties.get("gid", None)
+
+        param_list = []
+        param_list.append(group)
+
+        if gid is not None:
+            param_list.append("--gid " + gid)
+
+        command = CommandRunner("groupadd " + ' '.join(param_list))
+        command.run()
+        command_status = command.status
+
+        if command_status == 0:
+            LOG.info("%s has been successfully created" % group)
+        elif command_status == 9:
+            LOG.error("An error occured creating %s group : " %
+                      group + "group name not unique")
+        elif command_status == 4:
+            LOG.error("An error occured creating %s group : " %
+                      group + "GID not unique")
+        elif command_status == 3:
+            LOG.error("An error occured creating %s group : " %
+                      group + "GID not valid")
+        elif command_status == 2:
+            LOG.error("An error occured creating %s group : " %
+                      group + "Invalid syntax")
+        else:
+            LOG.error("An error occured creating %s group" % group)
+
+
+class UsersHandler(object):
+
+    def __init__(self, users):
+        self.users = users
+
+    def apply_users(self):
+        """
+        Create Linux/UNIX users and assign user IDs, groups and homedir
+        """
+        if not self.users:
+            return
+        for user, properties in self.users.iteritems():
+            LOG.debug("%s user is being created" % user)
+            self._initialize_user(user, properties)
+
+    def _initialize_user(self, user, properties):
+        uid = properties.get("uid", None)
+        homeDir = properties.get("homeDir", None)
+
+        param_list = []
+        param_list.append(user)
+
+        if uid is not None:
+            param_list.append("--uid " + uid)
+
+        if homeDir is not None:
+            param_list.append("--home " + homeDir)
+
+        if "groups" in properties:
+            param_list.append("--groups " + ','.join(properties["groups"]))
+
+        #Users are created as non-interactive system users with a shell
+        #of /sbin/nologin. This is by design and cannot be modified.
+        param_list.append("--shell /sbin/nologin")
+
+        command = CommandRunner("useradd " + ' '.join(param_list))
+        command.run()
+        command_status = command.status
+
+        if command_status == 0:
+            LOG.info("%s has been successfully created" % user)
+        elif command_status == 9:
+            LOG.error("An error occured creating %s user : " %
+                      user + "user name not unique")
+        elif command_status == 6:
+            LOG.error("An error occured creating %s user : " %
+                      user + "group does not exist")
+        elif command_status == 4:
+            LOG.error("An error occured creating %s user : " %
+                      user + "UID not unique")
+        elif command_status == 3:
+            LOG.error("An error occured creating %s user : " %
+                      user + "Invalid argument")
+        elif command_status == 2:
+            LOG.error("An error occured creating %s user : " %
+                      user + "Invalid syntax")
+        else:
+            LOG.error("An error occured creating %s user" % user)
+
+
 class MetadataServerConnectionError(Exception):
     pass
 
@@ -804,7 +1015,8 @@ class Metadata(object):
     DEFAULT_PORT = 8000
 
     def __init__(self, stack, resource, access_key=None,
-                 secret_key=None, credentials_file=None, region=None):
+                 secret_key=None, credentials_file=None, region=None,
+                 configsets=None):
 
         self.stack = stack
         self.resource = resource
@@ -814,6 +1026,7 @@ class Metadata(object):
         self.credentials_file = credentials_file
         self.access_key = access_key
         self.secret_key = secret_key
+        self.configsets = configsets
 
         # TODO(asalkeld) is this metadata for the local resource?
         self._is_local_metadata = True
@@ -837,10 +1050,10 @@ class Metadata(object):
 
         port = metadata_server_port() or self.DEFAULT_PORT
 
-        client = CloudFormationConnection(
-                         aws_access_key_id=access_key,
-                         aws_secret_access_key=secret_key,
-                         is_secure=False, port=port, path="/v1", debug=0)
+        client = CloudFormationConnection(aws_access_key_id=access_key,
+                                          aws_secret_access_key=secret_key,
+                                          is_secure=False, port=port,
+                                          path="/v1", debug=0)
 
         try:
             res = client.describe_stack_resource(self.stack, self.resource)
@@ -852,7 +1065,8 @@ class Metadata(object):
                    'DescribeStackResourceResult']['StackResourceDetail']
             return resource_detail['Metadata']
         except:
-            raise MetadataServerConnectionError("Error getting remote metadata")
+            raise MetadataServerConnectionError("Error getting \
+                                                remote metadata")
 
     def retrieve(self, meta_str=None):
         """
@@ -915,7 +1129,7 @@ class Metadata(object):
             self._has_changed = True
 
         # save current metadata to file
-        tmp_mdpath='/tmp/last_metadata'
+        tmp_mdpath = '/tmp/last_metadata'
         with open(tmp_mdpath, 'w+') as cf:
             os.chmod(tmp_mdpath, 0600)
             cf.write(json.dumps(self._metadata))
@@ -934,39 +1148,45 @@ class Metadata(object):
             self._metadata = self._metadata[self._init_key]
         return is_valid
 
-    def _process_config(self):
+    def _process_config(self, config="config"):
         """
         Parse and process a config section
           * packages
           * sources
-          * users (not yet)
-          * groups (not yet)
+          * groups
+          * users
           * files
-          * commands (not yet)
+          * commands
           * services
         """
 
-        self._config = self._metadata["config"]
+        try:
+            self._config = self._metadata[config]
+        except KeyError:
+            raise Exception("Could not find '%s' set in template, may need to"
+                            " specify another set." % config)
         PackagesHandler(self._config.get("packages")).apply_packages()
-        #FIXME: handle sources
         SourcesHandler(self._config.get("sources")).apply_sources()
-        #FIXME: handle users
-        #FIXME: handle groups
+        GroupsHandler(self._config.get("groups")).apply_groups()
+        UsersHandler(self._config.get("users")).apply_users()
         FilesHandler(self._config.get("files")).apply_files()
-        #FIXME: handle commands
+        CommandsHandler(self._config.get("commands")).apply_commands()
         ServicesHandler(self._config.get("services")).apply_services()
 
     def cfn_init(self):
         """
         Process the resource metadata
         """
-        # FIXME: when config sets are implemented, this should select the
-        # correct config set from the metadata, and send each config in the
-        # config set to process_config
         if not self._is_valid_metadata():
             raise Exception("invalid metadata")
         else:
-            self._process_config()
+            executionlist = ConfigsetsHandler(self._metadata.get("configSets"),
+                                              self.configsets).get_configsets()
+            if not executionlist:
+                self._process_config()
+            else:
+                for item in executionlist:
+                    self._process_config(item)
 
     def cfn_hup(self, hooks):
         """

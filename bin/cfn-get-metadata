@@ -82,6 +82,7 @@ metadata = Metadata(args.stack_name,
                     args.logical_resource_id,
                     access_key=args.access_key,
                     secret_key=args.secret_key,
-                    region=args.region)
+                    region=args.region,
+                    credentials_file=args.credential_file)
 metadata.retrieve()
 LOG.debug(str(metadata))
