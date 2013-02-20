@@ -816,19 +816,27 @@ class ConfigsetsHandler(object):
         return executionlist
 
 
-def metadata_server_port():
+def metadata_server_port(datafile='/var/lib/cloud/data/cfn-metadata-server'):
     """
     Return the the metadata server port
     reads the :NNNN from the end of the URL in cfn-metadata-server
     """
     try:
-        f = open("/var/lib/cloud/data/cfn-metadata-server")
+        f = open(datafile)
         server_url = f.read().strip()
         f.close()
-        if not server_url[-1] == '/':
-            server_url += '/'
+    except IOError:
+        return None
+
+    if len(server_url) < 1:
+        return None
+
+    if server_url[-1] == '/':
+        server_url = server_url[:-1]
+
+    try:
         return int(server_url.split(':')[-1])
-    except:
+    except ValueError:
         return None
 
 
