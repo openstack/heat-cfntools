@@ -14,7 +14,9 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
+import json
 from testtools import TestCase
+from testtools.matchers import FileContains
 from tempfile import NamedTemporaryFile
 
 from heat_cfntools.cfntools import cfn_helper
@@ -88,3 +90,75 @@ class TestCfnHelper(TestCase):
             'AWSAccessKeyId    =    foo\nAWSSecretKey    =    bar\n',
             {'AWSAccessKeyId': 'foo', 'AWSSecretKey': 'bar'}
         )
+
+
+class TestMetadataRetrieve(TestCase):
+
+    def test_metadata_retrieve_files(self):
+
+        md_data = {"AWS::CloudFormation::Init": {"config": {"files": {
+            "/tmp/foo": {"content": "bar"}}}}}
+        md_str = json.dumps(md_data)
+
+        md = cfn_helper.Metadata('teststack', None)
+
+        with NamedTemporaryFile() as last_file:
+            pass
+
+        with NamedTemporaryFile(mode='w+') as default_file:
+            default_file.write(md_str)
+            default_file.flush()
+            self.assertThat(default_file.name, FileContains(md_str))
+
+            md.retrieve(
+                default_path=default_file.name,
+                last_path=last_file.name)
+
+            self.assertThat(last_file.name, FileContains(md_str))
+            self.assertDictEqual(md_data, md._metadata)
+
+        md = cfn_helper.Metadata('teststack', None)
+        md.retrieve(
+            default_path=default_file.name,
+            last_path=last_file.name)
+        self.assertDictEqual(md_data, md._metadata)
+
+    def test_metadata_retrieve_none(self):
+
+        md = cfn_helper.Metadata('teststack', None)
+        with NamedTemporaryFile() as last_file:
+            pass
+        with NamedTemporaryFile() as default_file:
+            pass
+
+        md.retrieve(
+            default_path=default_file.name,
+            last_path=last_file.name)
+        self.assertIsNone(md._metadata)
+
+    def test_metadata_retrieve_passed(self):
+
+        md_data = {"AWS::CloudFormation::Init": {"config": {"files": {
+            "/tmp/foo": {"content": "bar"}}}}}
+        md_str = json.dumps(md_data)
+
+        md = cfn_helper.Metadata('teststack', None)
+        md.retrieve(meta_str=md_str)
+        self.assertDictEqual(md_data, md._metadata)
+
+        md = cfn_helper.Metadata('teststack', None)
+        md.retrieve(meta_str=md_data)
+        self.assertDictEqual(md_data, md._metadata)
+        self.assertEqual(md_str, str(md))
+
+    def test_is_valid_metadata(self):
+        md_data = {"AWS::CloudFormation::Init": {"config": {"files": {
+            "/tmp/foo": {"content": "bar"}}}}}
+        md = cfn_helper.Metadata('teststack', None)
+        md.retrieve(meta_str=md_data)
+
+        self.assertDictEqual(md_data, md._metadata)
+        self.assertTrue(md._is_valid_metadata())
+        self.assertDictEqual(
+            md_data['AWS::CloudFormation::Init'], md._metadata)
+
