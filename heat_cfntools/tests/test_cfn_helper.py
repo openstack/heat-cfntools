@@ -68,3 +68,23 @@ class TestCfnHelper(TestCase):
         self.assertFalse(cfn_helper.to_boolean(0))
         self.assertFalse(cfn_helper.to_boolean(None))
         self.assertFalse(cfn_helper.to_boolean('fingle'))
+
+    def test_parse_creds_file(self):
+        def parse_creds_test(file_contents, creds_match):
+            with NamedTemporaryFile(mode='w') as fcreds:
+                fcreds.write(file_contents)
+                fcreds.flush()
+                creds = cfn_helper.parse_creds_file(fcreds.name)
+                self.assertDictEqual(creds_match, creds)
+        parse_creds_test(
+            'AWSAccessKeyId=foo\nAWSSecretKey=bar\n',
+            {'AWSAccessKeyId': 'foo', 'AWSSecretKey': 'bar'}
+        )
+        parse_creds_test(
+            'AWSAccessKeyId =foo\nAWSSecretKey= bar\n',
+            {'AWSAccessKeyId': 'foo', 'AWSSecretKey': 'bar'}
+        )
+        parse_creds_test(
+            'AWSAccessKeyId    =    foo\nAWSSecretKey    =    bar\n',
+            {'AWSAccessKeyId': 'foo', 'AWSSecretKey': 'bar'}
+        )
