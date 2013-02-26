@@ -1076,7 +1076,10 @@ class Metadata(object):
             raise MetadataServerConnectionError("Error getting \
                                                 remote metadata")
 
-    def retrieve(self, meta_str=None):
+    def retrieve(self,
+        meta_str=None,
+        default_path='/var/lib/cloud/data/cfn-init-data',
+        last_path='/tmp/last_metadata'):
         """
         Read the metadata from the given filename
         """
@@ -1098,8 +1101,7 @@ class Metadata(object):
                 # affecting cfn-hup, in which case we want to use last_metadata
                 # or the logic below could re-run a stale cfn-init-data
                 fd = None
-                for filepath in ['/tmp/last_metadata',
-                                 '/var/lib/cloud/data/cfn-init-data']:
+                for filepath in [last_path, default_path]:
                     try:
                         fd = open(filepath)
                     except IOError:
@@ -1127,7 +1129,7 @@ class Metadata(object):
         old_md5 = None
 
         try:
-            with open('/tmp/last_metadata') as lm:
+            with open(last_path) as lm:
                 om = hashlib.md5()
                 om.update(lm.read())
                 old_md5 = om.hexdigest()
@@ -1137,7 +1139,7 @@ class Metadata(object):
             self._has_changed = True
 
         # save current metadata to file
-        tmp_mdpath = '/tmp/last_metadata'
+        tmp_mdpath = last_path
         with open(tmp_mdpath, 'w+') as cf:
             os.chmod(tmp_mdpath, 0600)
             cf.write(json.dumps(self._metadata))
