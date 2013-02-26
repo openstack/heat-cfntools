@@ -53,3 +53,18 @@ class TestCfnHelper(TestCase):
         random_filename = self.getUniqueString()
         self.assertEquals(None,
                           cfn_helper.metadata_server_port(random_filename))
+
+    def test_to_boolean(self):
+        self.assertTrue(cfn_helper.to_boolean(True))
+        self.assertTrue(cfn_helper.to_boolean('true'))
+        self.assertTrue(cfn_helper.to_boolean('yes'))
+        self.assertTrue(cfn_helper.to_boolean('1'))
+        self.assertTrue(cfn_helper.to_boolean(1))
+
+        self.assertFalse(cfn_helper.to_boolean(False))
+        self.assertFalse(cfn_helper.to_boolean('false'))
+        self.assertFalse(cfn_helper.to_boolean('no'))
+        self.assertFalse(cfn_helper.to_boolean('0'))
+        self.assertFalse(cfn_helper.to_boolean(0))
+        self.assertFalse(cfn_helper.to_boolean(None))
+        self.assertFalse(cfn_helper.to_boolean('fingle'))
