@@ -15,9 +15,11 @@
 # under the License.
 
 import json
+import mox
 from testtools import TestCase
 from testtools.matchers import FileContains
 from tempfile import NamedTemporaryFile
+from boto.cloudformation import CloudFormationConnection
 
 from heat_cfntools.cfntools import cfn_helper
 
@@ -162,3 +164,49 @@ class TestMetadataRetrieve(TestCase):
         self.assertDictEqual(
             md_data['AWS::CloudFormation::Init'], md._metadata)
 
+    def test_remote_metadata(self):
+
+        md_data = {"AWS::CloudFormation::Init": {"config": {"files": {
+            "/tmp/foo": {"content": "bar"}}}}}
+
+        m = mox.Mox()
+        m.StubOutWithMock(CloudFormationConnection, 'describe_stack_resource')
+
+        CloudFormationConnection.describe_stack_resource(
+            'teststack', None).MultipleTimes().AndReturn({
+                'DescribeStackResourceResponse':
+                    {'DescribeStackResourceResult':
+                        {'StackResourceDetail':
+                            {'Metadata': md_data}}}
+                    })
+
+        m.ReplayAll()
+        try:
+            md = cfn_helper.Metadata('teststack', None,
+                access_key='foo',
+                secret_key='bar')
+            md.retrieve()
+            self.assertDictEqual(md_data, md._metadata)
+
+            with NamedTemporaryFile(mode='w') as fcreds:
+                fcreds.write('AWSAccessKeyId=foo\nAWSSecretKey=bar\n')
+                fcreds.flush()
+                md = cfn_helper.Metadata('teststack', None,
+                    credentials_file=fcreds.name)
+                md.retrieve()
+            self.assertDictEqual(md_data, md._metadata)
+
+            m.VerifyAll()
+        finally:
+            m.UnsetStubs()
+
+    def test_cfn_init(self):
+
+        with NamedTemporaryFile(mode='w+') as foo_file:
+            md_data = {"AWS::CloudFormation::Init": {"config": {"files": {
+                foo_file.name: {"content": "bar"}}}}}
+
+            md = cfn_helper.Metadata('teststack', None)
+            md.retrieve(meta_str=md_data)
+            md.cfn_init()
+            self.assertThat(foo_file.name, FileContains('bar'))
