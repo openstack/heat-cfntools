@@ -42,7 +42,7 @@ from urlparse import urlparse, urlunparse
 
 # Override BOTO_CONFIG, which makes boto look only at the specified
 # config file, instead of the default locations
-os.environ['BOTO_CONFIG'] = '/var/lib/cloud/data/cfn-boto-cfg'
+os.environ['BOTO_CONFIG'] = '/var/lib/heat-cfntools/cfn-boto-cfg'
 from boto.cloudformation import CloudFormationConnection
 
 
@@ -816,7 +816,7 @@ class ConfigsetsHandler(object):
         return executionlist
 
 
-def metadata_server_port(datafile='/var/lib/cloud/data/cfn-metadata-server'):
+def metadata_server_port(datafile='/var/lib/heat-cfntools/cfn-metadata-server'):
     """
     Return the the metadata server port
     reads the :NNNN from the end of the URL in cfn-metadata-server
@@ -1074,7 +1074,7 @@ class Metadata(object):
 
     def retrieve(self,
         meta_str=None,
-        default_path='/var/lib/cloud/data/cfn-init-data',
+        default_path='/var/lib/heat-cfntools/cfn-init-data',
         last_path='/tmp/last_metadata'):
         """
         Read the metadata from the given filename
@@ -1090,7 +1090,7 @@ class Metadata(object):
                 # If reading remote metadata fails, we fall-back on local files
                 # in order to get the most up-to-date version, we try:
                 # /tmp/last_metadata, followed by
-                # /var/lib/cloud/data/cfn-init-data
+                # /var/lib/heat-cfntools/cfn-init-data
                 # This should allow us to do the right thing both during the
                 # first cfn-init run (when we only have cfn-init-data), and
                 # in the event of a temporary interruption to connectivity
