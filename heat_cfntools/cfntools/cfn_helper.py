@@ -1063,18 +1063,14 @@ class Metadata(object):
                                           is_secure=False, port=port,
                                           path="/v1", debug=0)
 
-        try:
-            res = client.describe_stack_resource(self.stack, self.resource)
-            # Note pending upstream patch will make this response a
-            # boto.cloudformation.stack.StackResourceDetail object
-            # which aligns better with all the existing calls
-            # see https://github.com/boto/boto/pull/857
-            resource_detail = res['DescribeStackResourceResponse'][
-                   'DescribeStackResourceResult']['StackResourceDetail']
-            return resource_detail['Metadata']
-        except:
-            raise MetadataServerConnectionError("Error getting \
-                                                remote metadata")
+        res = client.describe_stack_resource(self.stack, self.resource)
+        # Note pending upstream patch will make this response a
+        # boto.cloudformation.stack.StackResourceDetail object
+        # which aligns better with all the existing calls
+        # see https://github.com/boto/boto/pull/857
+        resource_detail = res['DescribeStackResourceResponse'][
+               'DescribeStackResourceResult']['StackResourceDetail']
+        return resource_detail['Metadata']
 
     def retrieve(self,
         meta_str=None,
