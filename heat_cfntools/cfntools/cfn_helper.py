@@ -28,17 +28,14 @@ import logging
 import os
 import os.path
 import pwd
-import re
 try:
-    import rpmUtils.updates as rpmupdates
     import rpmUtils.miscutils as rpmutils
+    import rpmUtils.updates as rpmupdates
     rpmutils_present = True
-except:
+except ImportError:
     rpmutils_present = False
+import re
 import subprocess
-import sys
-from urllib2 import urlopen, Request
-from urlparse import urlparse, urlunparse
 
 # Override BOTO_CONFIG, which makes boto look only at the specified
 # config file, instead of the default locations
@@ -94,7 +91,7 @@ class HupConfig(object):
         try:
             with open(self.credential_file) as f:
                 self.credentials = f.read()
-        except:
+        except Exception:
             raise Exception("invalid credentials file %s" %
                             self.credential_file)
 
@@ -117,7 +114,7 @@ class HupConfig(object):
         resources = []
         for h in self.hooks:
             r = self.hooks[h].resource_name_get()
-            if not r in resources:
+            if r not in resources:
                 resources.append(self.hooks[h].resource_name_get())
         return resources
 
@@ -191,8 +188,8 @@ class CommandRunner(object):
         self._stdout = output[0]
         self._stderr = output[1]
         if self._status:
-            LOG.debug("Return code of %d after executing: '%s'" % \
-                      (self._status, cmd))
+            LOG.debug("Return code of %d after executing: '%s'" % (
+                self._status, cmd))
         if self._next:
             self._next.run()
         return self
@@ -811,12 +808,14 @@ class ConfigsetsHandler(object):
                                 " section" % item)
             self.expand_sets(self.configsets[item], executionlist)
         if not executionlist:
-            raise Exception("Requested configSet %s empty?" % self.selectedsets)
+            raise Exception(
+                "Requested configSet %s empty?" % self.selectedsets)
 
         return executionlist
 
 
-def metadata_server_port(datafile='/var/lib/heat-cfntools/cfn-metadata-server'):
+def metadata_server_port(
+        datafile='/var/lib/heat-cfntools/cfn-metadata-server'):
     """
     Return the the metadata server port
     reads the :NNNN from the end of the URL in cfn-metadata-server
@@ -1069,13 +1068,14 @@ class Metadata(object):
         # which aligns better with all the existing calls
         # see https://github.com/boto/boto/pull/857
         resource_detail = res['DescribeStackResourceResponse'][
-               'DescribeStackResourceResult']['StackResourceDetail']
+            'DescribeStackResourceResult']['StackResourceDetail']
         return resource_detail['Metadata']
 
-    def retrieve(self,
-        meta_str=None,
-        default_path='/var/lib/heat-cfntools/cfn-init-data',
-        last_path='/tmp/last_metadata'):
+    def retrieve(
+            self,
+            meta_str=None,
+            default_path='/var/lib/heat-cfntools/cfn-init-data',
+            last_path='/tmp/last_metadata'):
         """
         Read the metadata from the given filename
         """
@@ -1129,7 +1129,7 @@ class Metadata(object):
                 om = hashlib.md5()
                 om.update(lm.read())
                 old_md5 = om.hexdigest()
-        except:
+        except Exception:
             pass
         if old_md5 != current_md5:
             self._has_changed = True
@@ -1148,8 +1148,8 @@ class Metadata(object):
         Should find the AWS::CloudFormation::Init json key
         """
         is_valid = self._metadata and \
-                   self._init_key in self._metadata and \
-                   self._metadata[self._init_key]
+            self._init_key in self._metadata and \
+            self._metadata[self._init_key]
         if is_valid:
             self._metadata = self._metadata[self._init_key]
         return is_valid

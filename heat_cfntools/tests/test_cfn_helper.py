@@ -14,20 +14,20 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
+import boto.cloudformation as cfn
 import json
 import mox
-from testtools import TestCase
-from testtools.matchers import FileContains
-from tempfile import NamedTemporaryFile
-from boto.cloudformation import CloudFormationConnection
+import tempfile
+import testtools
+import testtools.matchers as ttm
 
 from heat_cfntools.cfntools import cfn_helper
 
 
-class TestCfnHelper(TestCase):
+class TestCfnHelper(testtools.TestCase):
 
     def _check_metadata_content(self, content, value):
-        with NamedTemporaryFile() as metadata_info:
+        with tempfile.NamedTemporaryFile() as metadata_info:
             metadata_info.write(content)
             metadata_info.flush()
             port = cfn_helper.metadata_server_port(metadata_info.name)
@@ -75,7 +75,7 @@ class TestCfnHelper(TestCase):
 
     def test_parse_creds_file(self):
         def parse_creds_test(file_contents, creds_match):
-            with NamedTemporaryFile(mode='w') as fcreds:
+            with tempfile.NamedTemporaryFile(mode='w') as fcreds:
                 fcreds.write(file_contents)
                 fcreds.flush()
                 creds = cfn_helper.parse_creds_file(fcreds.name)
@@ -94,7 +94,7 @@ class TestCfnHelper(TestCase):
         )
 
 
-class TestMetadataRetrieve(TestCase):
+class TestMetadataRetrieve(testtools.TestCase):
 
     def test_metadata_retrieve_files(self):
 
@@ -104,19 +104,19 @@ class TestMetadataRetrieve(TestCase):
 
         md = cfn_helper.Metadata('teststack', None)
 
-        with NamedTemporaryFile() as last_file:
+        with tempfile.NamedTemporaryFile() as last_file:
             pass
 
-        with NamedTemporaryFile(mode='w+') as default_file:
+        with tempfile.NamedTemporaryFile(mode='w+') as default_file:
             default_file.write(md_str)
             default_file.flush()
-            self.assertThat(default_file.name, FileContains(md_str))
+            self.assertThat(default_file.name, ttm.FileContains(md_str))
 
             md.retrieve(
                 default_path=default_file.name,
                 last_path=last_file.name)
 
-            self.assertThat(last_file.name, FileContains(md_str))
+            self.assertThat(last_file.name, ttm.FileContains(md_str))
             self.assertDictEqual(md_data, md._metadata)
 
         md = cfn_helper.Metadata('teststack', None)
@@ -128,9 +128,9 @@ class TestMetadataRetrieve(TestCase):
     def test_metadata_retrieve_none(self):
 
         md = cfn_helper.Metadata('teststack', None)
-        with NamedTemporaryFile() as last_file:
+        with tempfile.NamedTemporaryFile() as last_file:
             pass
-        with NamedTemporaryFile() as default_file:
+        with tempfile.NamedTemporaryFile() as default_file:
             pass
 
         md.retrieve(
@@ -170,29 +170,30 @@ class TestMetadataRetrieve(TestCase):
             "/tmp/foo": {"content": "bar"}}}}}
 
         m = mox.Mox()
-        m.StubOutWithMock(CloudFormationConnection, 'describe_stack_resource')
+        m.StubOutWithMock(
+            cfn.CloudFormationConnection, 'describe_stack_resource')
 
-        CloudFormationConnection.describe_stack_resource(
+        cfn.CloudFormationConnection.describe_stack_resource(
             'teststack', None).MultipleTimes().AndReturn({
-                'DescribeStackResourceResponse':
-                    {'DescribeStackResourceResult':
-                        {'StackResourceDetail':
-                            {'Metadata': md_data}}}
-                    })
+                'DescribeStackResourceResponse': {
+                    'DescribeStackResourceResult': {
+                        'StackResourceDetail': {'Metadata': md_data}}}})
 
         m.ReplayAll()
         try:
-            md = cfn_helper.Metadata('teststack', None,
+            md = cfn_helper.Metadata(
+                'teststack',
+                None,
                 access_key='foo',
                 secret_key='bar')
             md.retrieve()
             self.assertDictEqual(md_data, md._metadata)
 
-            with NamedTemporaryFile(mode='w') as fcreds:
+            with tempfile.NamedTemporaryFile(mode='w') as fcreds:
                 fcreds.write('AWSAccessKeyId=foo\nAWSSecretKey=bar\n')
                 fcreds.flush()
-                md = cfn_helper.Metadata('teststack', None,
-                    credentials_file=fcreds.name)
+                md = cfn_helper.Metadata(
+                    'teststack', None, credentials_file=fcreds.name)
                 md.retrieve()
             self.assertDictEqual(md_data, md._metadata)
 
@@ -202,11 +203,11 @@ class TestMetadataRetrieve(TestCase):
 
     def test_cfn_init(self):
 
-        with NamedTemporaryFile(mode='w+') as foo_file:
+        with tempfile.NamedTemporaryFile(mode='w+') as foo_file:
             md_data = {"AWS::CloudFormation::Init": {"config": {"files": {
                 foo_file.name: {"content": "bar"}}}}}
 
             md = cfn_helper.Metadata('teststack', None)
             md.retrieve(meta_str=md_data)
             md.cfn_init()
-            self.assertThat(foo_file.name, FileContains('bar'))
+            self.assertThat(foo_file.name, ttm.FileContains('bar'))

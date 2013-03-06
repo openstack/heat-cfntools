@@ -24,7 +24,7 @@ setuptools.setup(
     name='heat-cfntools',
     version='1.2',
     description='Tools required to be installed on Heat '
-        'provisioned cloud instances',
+    'provisioned cloud instances',
     long_description=read('README.rst'),
     license='Apache License (2.0)',
     author='Heat API Developers',
