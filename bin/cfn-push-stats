@@ -86,6 +86,8 @@ parser.add_argument('--cpu-util', required=False, action="store_true",
                     help='Reports cpu utilization in percentages.')
 parser.add_argument('--haproxy', required=False, action='store_true',
                     help='Reports HAProxy loadbalancer usage.')
+parser.add_argument('--haproxy-latency', required=False, action='store_true',
+                    help='Reports HAProxy latency')
 parser.add_argument('--heartbeat', required=False, action='store_true',
                     help='Sends a Heartbeat.')
 parser.add_argument('--watch', required=True,
@@ -171,7 +173,7 @@ if args.cpu_util:
 
 # HAProxy
 # =======
-def parse_haproxy_unix_socket(res):
+def parse_haproxy_unix_socket(res, latency_only=False):
     # http://docs.amazonwebservices.com/ElasticLoadBalancing/latest
     # /DeveloperGuide/US_MonitoringLoadBalancerWithCW.html
 
@@ -196,27 +198,29 @@ def parse_haproxy_unix_socket(res):
     up_count = 0
     down_count = 0
     for f in raw:
-        if f[num_map['type']] == type_map['FRONTEND']:
-            add_stat('RequestCount', f[num_map['req_tot']])
-            add_stat('HTTPCode_ELB_4XX', f[num_map['hrsp_4xx']])
-            add_stat('HTTPCode_ELB_5XX', f[num_map['hrsp_5xx']])
-        elif f[num_map['type']] == type_map['BACKEND']:
-            add_stat('HTTPCode_Backend_2XX', f[num_map['hrsp_2xx']])
-            add_stat('HTTPCode_Backend_3XX', f[num_map['hrsp_3xx']])
-            add_stat('HTTPCode_Backend_4XX', f[num_map['hrsp_4xx']])
-            add_stat('HTTPCode_Backend_5XX', f[num_map['hrsp_5xx']])
-        else:
-            if f[num_map['status']] == 'UP':
-                up_count = up_count + 1
+        if latency_only is False:
+            if f[num_map['type']] == type_map['FRONTEND']:
+                add_stat('RequestCount', f[num_map['req_tot']])
+                add_stat('HTTPCode_ELB_4XX', f[num_map['hrsp_4xx']])
+                add_stat('HTTPCode_ELB_5XX', f[num_map['hrsp_5xx']])
+            elif f[num_map['type']] == type_map['BACKEND']:
+                add_stat('HTTPCode_Backend_2XX', f[num_map['hrsp_2xx']])
+                add_stat('HTTPCode_Backend_3XX', f[num_map['hrsp_3xx']])
+                add_stat('HTTPCode_Backend_4XX', f[num_map['hrsp_4xx']])
+                add_stat('HTTPCode_Backend_5XX', f[num_map['hrsp_5xx']])
             else:
-                down_count = down_count + 1
+                if f[num_map['status']] == 'UP':
+                    up_count = up_count + 1
+                else:
+                    down_count = down_count + 1
         if f[num_map['check_duration']] != '':
             latency = max(float(f[num_map['check_duration']]), latency)
 
     # note: haproxy's check_duration is in ms, but Latency is in seconds
     add_stat('Latency', str(latency / 1000), unit='Seconds')
-    add_stat('HealthyHostCount', str(up_count))
-    add_stat('UnHealthyHostCount', str(down_count))
+    if latency_only is False:
+        add_stat('HealthyHostCount', str(up_count))
+        add_stat('UnHealthyHostCount', str(down_count))
 
 
 def send_stats(info):
@@ -250,6 +254,11 @@ if args.haproxy:
     namespace = 'AWS/ELB'
     lb_data = {}
     parse_haproxy_unix_socket(lb_data)
+    send_stats(lb_data)
+elif args.haproxy_latency:
+    namespace = 'AWS/ELB'
+    lb_data = {}
+    parse_haproxy_unix_socket(lb_data, latency_only=True)
     send_stats(lb_data)
 else:
     send_stats(data)
