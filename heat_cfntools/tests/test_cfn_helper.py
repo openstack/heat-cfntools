@@ -72,6 +72,245 @@ class TestCommandRunner(MockPopenTestCase):
         self.m.VerifyAll()
 
 
+class TestServicesHandler(MockPopenTestCase):
+
+    def test_services_handler_systemd(self):
+        # apply_services
+        self.mock_cmd_run(
+            ['su', 'root', '-c', '/bin/systemctl enable httpd.service']
+        ).AndReturn(FakePOpen())
+        self.mock_cmd_run(
+            ['su', 'root', '-c', '/bin/systemctl status httpd.service']
+        ).AndReturn(FakePOpen(returncode=-1))
+        self.mock_cmd_run(
+            ['su', 'root', '-c', '/bin/systemctl start httpd.service']
+        ).AndReturn(FakePOpen())
+        self.mock_cmd_run(
+            ['su', 'root', '-c', '/bin/systemctl enable mysqld.service']
+        ).AndReturn(FakePOpen())
+        self.mock_cmd_run(
+            ['su', 'root', '-c', '/bin/systemctl status mysqld.service']
+        ).AndReturn(FakePOpen(returncode=-1))
+        self.mock_cmd_run(
+            ['su', 'root', '-c', '/bin/systemctl start mysqld.service']
+        ).AndReturn(FakePOpen())
+
+        # monitor_services not running
+        self.mock_cmd_run(
+            ['su', 'root', '-c', '/bin/systemctl status httpd.service']
+        ).AndReturn(FakePOpen(returncode=-1))
+        self.mock_cmd_run(
+            ['su', 'root', '-c', '/bin/systemctl start httpd.service']
+        ).AndReturn(FakePOpen())
+        self.mock_cmd_run(
+            ['su', 'root', '-c', '/bin/services_restarted']
+        ).AndReturn(FakePOpen())
+        self.mock_cmd_run(
+            ['su', 'root', '-c', '/bin/systemctl status mysqld.service']
+        ).AndReturn(FakePOpen(returncode=-1))
+        self.mock_cmd_run(
+            ['su', 'root', '-c', '/bin/systemctl start mysqld.service']
+        ).AndReturn(FakePOpen())
+        self.mock_cmd_run(
+            ['su', 'root', '-c', '/bin/services_restarted']
+        ).AndReturn(FakePOpen())
+
+        # monitor_services running
+        self.mock_cmd_run(
+            ['su', 'root', '-c', '/bin/systemctl status httpd.service']
+        ).AndReturn(FakePOpen())
+
+        self.mock_cmd_run(
+            ['su', 'root', '-c', '/bin/systemctl status mysqld.service']
+        ).AndReturn(FakePOpen())
+
+        self.m.ReplayAll()
+
+        services = {
+            "systemd": {
+                "mysqld": {"enabled": "true", "ensureRunning": "true"},
+                "httpd": {"enabled": "true", "ensureRunning": "true"}
+            }
+        }
+        hooks = [
+            cfn_helper.Hook(
+                'hook1',
+                'service.restarted',
+                'Resources.resource1.Metadata',
+                'root',
+                '/bin/services_restarted')
+        ]
+        sh = cfn_helper.ServicesHandler(services, 'resource1', hooks)
+        sh.apply_services()
+        # services not running
+        sh.monitor_services()
+
+        # services running
+        sh.monitor_services()
+
+        self.m.VerifyAll()
+
+    def test_services_handler_systemd_disabled(self):
+        # apply_services
+        self.mock_cmd_run(
+            ['su', 'root', '-c', '/bin/systemctl disable httpd.service']
+        ).AndReturn(FakePOpen())
+        self.mock_cmd_run(
+            ['su', 'root', '-c', '/bin/systemctl status httpd.service']
+        ).AndReturn(FakePOpen())
+        self.mock_cmd_run(
+            ['su', 'root', '-c', '/bin/systemctl stop httpd.service']
+        ).AndReturn(FakePOpen())
+        self.mock_cmd_run(
+            ['su', 'root', '-c', '/bin/systemctl disable mysqld.service']
+        ).AndReturn(FakePOpen())
+        self.mock_cmd_run(
+            ['su', 'root', '-c', '/bin/systemctl status mysqld.service']
+        ).AndReturn(FakePOpen())
+        self.mock_cmd_run(
+            ['su', 'root', '-c', '/bin/systemctl stop mysqld.service']
+        ).AndReturn(FakePOpen())
+
+        self.m.ReplayAll()
+
+        services = {
+            "systemd": {
+                "mysqld": {"enabled": "false", "ensureRunning": "false"},
+                "httpd": {"enabled": "false", "ensureRunning": "false"}
+            }
+        }
+        hooks = [
+            cfn_helper.Hook(
+                'hook1',
+                'service.restarted',
+                'Resources.resource1.Metadata',
+                'root',
+                '/bin/services_restarted')
+        ]
+        sh = cfn_helper.ServicesHandler(services, 'resource1', hooks)
+        sh.apply_services()
+
+        self.m.VerifyAll()
+
+    def test_services_handler_sysv(self):
+        # apply_services
+        self.mock_cmd_run(
+            ['su', 'root', '-c', '/sbin/chkconfig httpd on']
+        ).AndReturn(FakePOpen())
+        self.mock_cmd_run(
+            ['su', 'root', '-c', '/sbin/service httpd status']
+        ).AndReturn(FakePOpen(returncode=-1))
+        self.mock_cmd_run(
+            ['su', 'root', '-c', '/sbin/service httpd start']
+        ).AndReturn(FakePOpen())
+        self.mock_cmd_run(
+            ['su', 'root', '-c', '/sbin/chkconfig mysqld on']
+        ).AndReturn(FakePOpen())
+        self.mock_cmd_run(
+            ['su', 'root', '-c', '/sbin/service mysqld status']
+        ).AndReturn(FakePOpen(returncode=-1))
+        self.mock_cmd_run(
+            ['su', 'root', '-c', '/sbin/service mysqld start']
+        ).AndReturn(FakePOpen())
+
+        # monitor_services not running
+        self.mock_cmd_run(
+            ['su', 'root', '-c', '/sbin/service httpd status']
+        ).AndReturn(FakePOpen(returncode=-1))
+        self.mock_cmd_run(
+            ['su', 'root', '-c', '/sbin/service httpd start']
+        ).AndReturn(FakePOpen())
+        self.mock_cmd_run(
+            ['su', 'root', '-c', '/bin/services_restarted']
+        ).AndReturn(FakePOpen())
+        self.mock_cmd_run(
+            ['su', 'root', '-c', '/sbin/service mysqld status']
+        ).AndReturn(FakePOpen(returncode=-1))
+        self.mock_cmd_run(
+            ['su', 'root', '-c', '/sbin/service mysqld start']
+        ).AndReturn(FakePOpen())
+        self.mock_cmd_run(
+            ['su', 'root', '-c', '/bin/services_restarted']
+        ).AndReturn(FakePOpen())
+
+        # monitor_services running
+        self.mock_cmd_run(
+            ['su', 'root', '-c', '/sbin/service httpd status']
+        ).AndReturn(FakePOpen())
+
+        self.mock_cmd_run(
+            ['su', 'root', '-c', '/sbin/service mysqld status']
+        ).AndReturn(FakePOpen())
+
+        self.m.ReplayAll()
+
+        services = {
+            "sysvinit": {
+                "mysqld": {"enabled": "true", "ensureRunning": "true"},
+                "httpd": {"enabled": "true", "ensureRunning": "true"}
+            }
+        }
+        hooks = [
+            cfn_helper.Hook(
+                'hook1',
+                'service.restarted',
+                'Resources.resource1.Metadata',
+                'root',
+                '/bin/services_restarted')
+        ]
+        sh = cfn_helper.ServicesHandler(services, 'resource1', hooks)
+        sh.apply_services()
+        # services not running
+        sh.monitor_services()
+
+        # services running
+        sh.monitor_services()
+
+        self.m.VerifyAll()
+
+    def test_services_handler_sysv_disabled(self):
+        # apply_services
+        self.mock_cmd_run(
+            ['su', 'root', '-c', '/sbin/chkconfig httpd off']
+        ).AndReturn(FakePOpen())
+        self.mock_cmd_run(
+            ['su', 'root', '-c', '/sbin/service httpd status']
+        ).AndReturn(FakePOpen())
+        self.mock_cmd_run(
+            ['su', 'root', '-c', '/sbin/service httpd stop']
+        ).AndReturn(FakePOpen())
+        self.mock_cmd_run(
+            ['su', 'root', '-c', '/sbin/chkconfig mysqld off']
+        ).AndReturn(FakePOpen())
+        self.mock_cmd_run(
+            ['su', 'root', '-c', '/sbin/service mysqld status']
+        ).AndReturn(FakePOpen())
+        self.mock_cmd_run(
+            ['su', 'root', '-c', '/sbin/service mysqld stop']
+        ).AndReturn(FakePOpen())
+
+        self.m.ReplayAll()
+
+        services = {
+            "sysvinit": {
+                "mysqld": {"enabled": "false", "ensureRunning": "false"},
+                "httpd": {"enabled": "false", "ensureRunning": "false"}
+            }
+        }
+        hooks = [
+            cfn_helper.Hook(
+                'hook1',
+                'service.restarted',
+                'Resources.resource1.Metadata',
+                'root',
+                '/bin/services_restarted')
+        ]
+        sh = cfn_helper.ServicesHandler(services, 'resource1', hooks)
+        sh.apply_services()
+
+        self.m.VerifyAll()
+
+
 class TestHupConfig(MockPopenTestCase):
 
     def test_load_main_section(self):
