@@ -164,11 +164,11 @@ class CommandRunner(object):
         s = "CommandRunner:"
         s += "\n\tcommand: %s" % self._command
         if self._status:
-            s += "\n\tstatus: %s" % self._status
+            s += "\n\tstatus: %s" % self.status
         if self._stdout:
-            s += "\n\tstdout: %s" % self._stdout
+            s += "\n\tstdout: %s" % self.stdout
         if self._stderr:
-            s += "\n\tstderr: %s" % self._stderr
+            s += "\n\tstderr: %s" % self.stderr
         return s
 
     def run(self, user='root', cwd=None, env=None):
