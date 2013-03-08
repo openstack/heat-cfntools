@@ -75,14 +75,15 @@ class HupConfig(object):
 
         self.load_main_section()
 
-        self.hooks = {}
+        self.hooks = []
         for s in self.config.sections():
             if s != 'main':
-                self.hooks[s] = Hook(s,
-                                     self.config.get(s, 'triggers'),
-                                     self.config.get(s, 'path'),
-                                     self.config.get(s, 'runas'),
-                                     self.config.get(s, 'action'))
+                self.hooks.append(Hook(
+                    s,
+                    self.config.get(s, 'triggers'),
+                    self.config.get(s, 'path'),
+                    self.config.get(s, 'runas'),
+                    self.config.get(s, 'action')))
 
     def load_main_section(self):
         # required values
@@ -113,9 +114,9 @@ class HupConfig(object):
     def unique_resources_get(self):
         resources = []
         for h in self.hooks:
-            r = self.hooks[h].resource_name_get()
-            if r not in resources:
-                resources.append(self.hooks[h].resource_name_get())
+            r = h.resource_name_get()
+            if not r in resources:
+                resources.append(h.resource_name_get())
         return resources
 
 
@@ -715,8 +716,7 @@ class ServicesHandler(object):
                                (service, start_cmd.stderr))
                     return
                 for h in self.hooks:
-                    self.hooks[h].event('service.restarted',
-                                        service, self.resource)
+                    h.event('service.restarted', service, self.resource)
 
     def _monitor_services(self, handler, services):
         for service, properties in services.iteritems():
@@ -1209,5 +1209,4 @@ class Metadata(object):
 
             if self._has_changed:
                 for h in hooks:
-                    hooks[h].event('post.update',
-                                   self.resource, self.resource)
+                    h.event('post.update', self.resource, self.resource)

@@ -72,6 +72,132 @@ class TestCommandRunner(MockPopenTestCase):
         self.m.VerifyAll()
 
 
+class TestHupConfig(MockPopenTestCase):
+
+    def test_load_main_section(self):
+        fcreds = tempfile.NamedTemporaryFile()
+        fcreds.write('AWSAccessKeyId=foo\nAWSSecretKey=bar\n')
+        fcreds.flush()
+
+        main_conf = tempfile.NamedTemporaryFile()
+        main_conf.write('''[main]
+stack=teststack
+credential-file=%s''' % fcreds.name)
+        main_conf.flush()
+        mainconfig = cfn_helper.HupConfig([open(main_conf.name)])
+        self.assertEqual(
+            '{stack: teststack, credential_file: %s, '
+            'region: nova, interval:10}' % fcreds.name,
+            str(mainconfig))
+        main_conf.close()
+
+        main_conf = tempfile.NamedTemporaryFile()
+        main_conf.write('''[main]
+stack=teststack
+region=region1
+credential-file=%s-invalid
+interval=120''' % fcreds.name)
+        main_conf.flush()
+        self.assertRaisesRegexp(
+            Exception,
+            'invalid credentials file',
+            cfn_helper.HupConfig,
+            [open(main_conf.name)])
+
+        fcreds.close()
+
+    def test_hup_config(self):
+        self.mock_cmd_run(['su', 'root', '-c', '/bin/hook2']).AndReturn(
+            FakePOpen('All good'))
+        self.mock_cmd_run(['su', 'root', '-c', '/bin/hook1']).AndReturn(
+            FakePOpen('All good'))
+        self.mock_cmd_run(['su', 'root', '-c', '/bin/hook3']).AndReturn(
+            FakePOpen('All good'))
+        self.mock_cmd_run(
+            ['su', 'root', '-c', '/bin/cfn-http-restarted']).AndReturn(
+                FakePOpen('All good'))
+        self.m.ReplayAll()
+
+        hooks_conf = tempfile.NamedTemporaryFile()
+
+        def write_hook_conf(f, name, triggers, path, action):
+            f.write(
+                '[%s]\ntriggers=%s\npath=%s\naction=%s\nrunas=root\n\n' % (
+                    name, triggers, path, action))
+
+        write_hook_conf(
+            hooks_conf,
+            'hook2',
+            'service2.restarted',
+            'Resources.resource2.Metadata',
+            '/bin/hook2')
+        write_hook_conf(
+            hooks_conf,
+            'hook1',
+            'service1.restarted',
+            'Resources.resource1.Metadata',
+            '/bin/hook1')
+        write_hook_conf(
+            hooks_conf,
+            'hook3',
+            'service3.restarted',
+            'Resources.resource3.Metadata',
+            '/bin/hook3')
+        write_hook_conf(
+            hooks_conf,
+            'cfn-http-restarted',
+            'service.restarted',
+            'Resources.resource.Metadata',
+            '/bin/cfn-http-restarted')
+        hooks_conf.flush()
+
+        fcreds = tempfile.NamedTemporaryFile()
+        fcreds.write('AWSAccessKeyId=foo\nAWSSecretKey=bar\n')
+        fcreds.flush()
+
+        main_conf = tempfile.NamedTemporaryFile()
+        main_conf.write('''[main]
+stack=teststack
+credential-file=%s
+region=region1
+interval=120''' % fcreds.name)
+        main_conf.flush()
+
+        mainconfig = cfn_helper.HupConfig([
+            open(main_conf.name),
+            open(hooks_conf.name)])
+        unique_resources = mainconfig.unique_resources_get()
+        self.assertSequenceEqual([
+            'resource2',
+            'resource1',
+            'resource3',
+            'resource'
+        ], unique_resources)
+
+        hooks = mainconfig.hooks
+        self.assertEqual(
+            '{hook2, service2.restarted, Resources.resource2.Metadata,'
+            ' root, /bin/hook2}', str(hooks[0]))
+        self.assertEqual(
+            '{hook1, service1.restarted, Resources.resource1.Metadata,'
+            ' root, /bin/hook1}', str(hooks[1]))
+        self.assertEqual(
+            '{hook3, service3.restarted, Resources.resource3.Metadata,'
+            ' root, /bin/hook3}', str(hooks[2]))
+        self.assertEqual(
+            '{cfn-http-restarted, service.restarted,'
+            ' Resources.resource.Metadata, root, /bin/cfn-http-restarted}',
+            str(hooks[3]))
+
+        for hook in mainconfig.hooks:
+            hook.event(hook.triggers, None, hook.resource_name_get())
+
+        hooks_conf.close()
+        fcreds.close()
+        main_conf.close()
+        self.m.VerifyAll()
+
+
 class TestCfnHelper(testtools.TestCase):
 
     def _check_metadata_content(self, content, value):
