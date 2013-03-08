@@ -8,7 +8,7 @@ python tools/hacking.py --doctest
 PEP8='python tools/hacking.py --ignore=N101,N201,N202,N301,N302,N303,N304,N305,N306,N401,N402,N403,N404,N702,N703,N801,N902'
 
 EXCLUDE='--exclude=.venv,.git,.tox,dist,doc,*lib/python*'
-EXCLUDE+=',*egg,build,*tools*'
+EXCLUDE+=',*egg,build,tools'
 
 # Check all .py files
 ${PEP8} ${EXCLUDE} .

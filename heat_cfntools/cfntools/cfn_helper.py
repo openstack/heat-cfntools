@@ -133,7 +133,7 @@ class Hook(object):
 
     def event(self, ev_name, ev_object, ev_resource):
         if self.resource_name_get() == ev_resource and \
-           ev_name in self.triggers:
+                ev_name in self.triggers:
             CommandRunner(self.action).run(user=self.runas)
         else:
             LOG.debug('event: {%s, %s, %s} did not match %s' %
