@@ -17,11 +17,59 @@
 import boto.cloudformation as cfn
 import json
 import mox
+import subprocess
 import tempfile
 import testtools
 import testtools.matchers as ttm
 
 from heat_cfntools.cfntools import cfn_helper
+
+
+class FakePOpen():
+    def __init__(self, stdout='', stderr='', returncode=0):
+        self.returncode = returncode
+        self.stdout = stdout
+        self.stderr = stderr
+
+    def communicate(self):
+        return (self.stdout, self.stderr)
+
+    def wait(self):
+        pass
+
+
+class MockPopenTestCase(testtools.TestCase):
+
+    def mock_cmd_run(self, command, cwd=None, env=None):
+        return subprocess.Popen(
+            command, cwd=cwd, env=env, stderr=-1, stdout=-1)
+
+    def setUp(self):
+        super(MockPopenTestCase, self).setUp()
+        self.m = mox.Mox()
+        self.m.StubOutWithMock(subprocess, 'Popen')
+        self.addCleanup(self.m.UnsetStubs)
+
+
+class TestCommandRunner(MockPopenTestCase):
+
+    def test_command_runner(self):
+        self.mock_cmd_run(['su', 'root', '-c', '/bin/command1']).AndReturn(
+            FakePOpen('All good'))
+        self.mock_cmd_run(['su', 'root', '-c', '/bin/command2']).AndReturn(
+            FakePOpen('Doing something', 'error', -1))
+        self.m.ReplayAll()
+        cmd2 = cfn_helper.CommandRunner('/bin/command2')
+        cmd1 = cfn_helper.CommandRunner('/bin/command1', cmd2)
+        cmd1.run('root')
+        self.assertEqual(
+            'CommandRunner:\n\tcommand: /bin/command1\n\tstdout: All good',
+            str(cmd1))
+        self.assertEqual(
+            'CommandRunner:\n\tcommand: /bin/command2\n\tstatus: -1\n'
+            '\tstdout: Doing something\n\tstderr: error',
+            str(cmd2))
+        self.m.VerifyAll()
 
 
 class TestCfnHelper(testtools.TestCase):
