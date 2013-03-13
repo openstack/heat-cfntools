@@ -355,7 +355,7 @@ class RpmHelper(object):
             cmd = "yum -y downgrade "
             cmd += " ".join(packages)
             LOG.info("Downgrading packages: %s" % cmd)
-            command = Command(cmd).run()
+            command = CommandRunner(cmd).run()
             if command.status:
                 LOG.warn("Failed to downgrade packages: %s" % cmd)
 
@@ -457,7 +457,7 @@ class PackagesHandler(object):
             if downgrades:
                 RpmHelper.downgrade(downgrades)
 
-    def _handle_rpm_packages(sef, packages):
+    def _handle_rpm_packages(self, packages):
         """
         Handle installation, upgrade, or downgrade of a set of
         packages via rpm.
