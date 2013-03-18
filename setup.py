@@ -23,7 +23,7 @@ def read(fname):
 
 setuptools.setup(
     name='heat-cfntools',
-    version='1.2',
+    version='1.2.1',
     description='Tools required to be installed on Heat '
     'provisioned cloud instances',
     long_description=read('README.rst'),
