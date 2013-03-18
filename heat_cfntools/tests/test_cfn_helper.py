@@ -557,20 +557,26 @@ class TestMetadataRetrieve(testtools.TestCase):
             "/tmp/foo": {"content": "bar"}}}}}
         md_str = json.dumps(md_data)
 
+        with tempfile.NamedTemporaryFile() as last_file:
+            pass
+
         md = cfn_helper.Metadata('teststack', None)
-        md.retrieve(meta_str=md_str)
+        md.retrieve(meta_str=md_str, last_path=last_file.name)
         self.assertDictEqual(md_data, md._metadata)
 
         md = cfn_helper.Metadata('teststack', None)
-        md.retrieve(meta_str=md_data)
+        md.retrieve(meta_str=md_data, last_path=last_file.name)
         self.assertDictEqual(md_data, md._metadata)
         self.assertEqual(md_str, str(md))
 
     def test_is_valid_metadata(self):
         md_data = {"AWS::CloudFormation::Init": {"config": {"files": {
             "/tmp/foo": {"content": "bar"}}}}}
+
+        with tempfile.NamedTemporaryFile() as last_file:
+            pass
         md = cfn_helper.Metadata('teststack', None)
-        md.retrieve(meta_str=md_data)
+        md.retrieve(meta_str=md_data, last_path=last_file.name)
 
         self.assertDictEqual(md_data, md._metadata)
         self.assertTrue(md._is_valid_metadata())
@@ -593,13 +599,17 @@ class TestMetadataRetrieve(testtools.TestCase):
                         'StackResourceDetail': {'Metadata': md_data}}}})
 
         m.ReplayAll()
+
+        with tempfile.NamedTemporaryFile() as last_file:
+            pass
+
         try:
             md = cfn_helper.Metadata(
                 'teststack',
                 None,
                 access_key='foo',
                 secret_key='bar')
-            md.retrieve()
+            md.retrieve(last_path=last_file.name)
             self.assertDictEqual(md_data, md._metadata)
 
             with tempfile.NamedTemporaryFile(mode='w') as fcreds:
@@ -607,7 +617,7 @@ class TestMetadataRetrieve(testtools.TestCase):
                 fcreds.flush()
                 md = cfn_helper.Metadata(
                     'teststack', None, credentials_file=fcreds.name)
-                md.retrieve()
+                md.retrieve(last_path=last_file.name)
             self.assertDictEqual(md_data, md._metadata)
 
             m.VerifyAll()
@@ -616,11 +626,14 @@ class TestMetadataRetrieve(testtools.TestCase):
 
     def test_cfn_init(self):
 
+        with tempfile.NamedTemporaryFile() as last_file:
+            pass
+
         with tempfile.NamedTemporaryFile(mode='w+') as foo_file:
             md_data = {"AWS::CloudFormation::Init": {"config": {"files": {
                 foo_file.name: {"content": "bar"}}}}}
 
             md = cfn_helper.Metadata('teststack', None)
-            md.retrieve(meta_str=md_data)
+            md.retrieve(meta_str=md_data, last_path=last_file.name)
             md.cfn_init()
             self.assertThat(foo_file.name, ttm.FileContains('bar'))
