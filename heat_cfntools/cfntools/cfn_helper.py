@@ -1199,7 +1199,7 @@ class Metadata(object):
         Process the resource metadata
         """
         if not self._is_valid_metadata():
-            raise Exception("invalid metadata")
+            LOG.info('Metadata does not contain a %s section' % self._init_key)
         else:
             if self._is_local_metadata:
                 self._config = self._metadata["config"]
