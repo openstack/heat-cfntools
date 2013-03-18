@@ -71,7 +71,7 @@ if __name__ == '__main__':
         '-f', '--force',
         dest="force",
         action='store_true',
-        help="If specified, will create symlinks even if they already exist",
+        help="If specified, will create symlinks even if there is already a target file",
         required=False)
     args = parser.parse_args()
 
