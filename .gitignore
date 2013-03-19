@@ -5,3 +5,4 @@ dist
 heat_cfntools.egg-info/
 .testrepository/
 subunit.log
+.tox
