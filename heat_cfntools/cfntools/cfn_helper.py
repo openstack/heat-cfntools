@@ -36,6 +36,7 @@ except ImportError:
     rpmutils_present = False
 import re
 import subprocess
+import tempfile
 
 # Override BOTO_CONFIG, which makes boto look only at the specified
 # config file, instead of the default locations
@@ -582,16 +583,17 @@ class SourcesHandler(object):
         self._sources = sources
 
     def _url_to_tmp_filename(self, url):
+        tempdir = tempfile.mkdtemp()
         sp = url.split('/')
         if 'https://github.com' in url:
             if 'zipball' == sp[-2]:
-                return '/tmp/%s-%s.zip' % (sp[-3], sp[-1])
+                return '%s/%s-%s.zip' % (tempdir, sp[-3], sp[-1])
             elif 'tarball' == sp[-2]:
-                return '/tmp/%s-%s.tar.gz' % (sp[-3], sp[-1])
+                return '%s/%s-%s.tar.gz' % (tempdir, sp[-3], sp[-1])
             else:
                 pass
 
-        return '/tmp/%s' % (sp[-1])
+        return '%s/%s' % (tempdir, sp[-1])
 
     def _decompress(self, archive, dest_dir):
         cmd_str = ''
@@ -627,8 +629,6 @@ class SourcesHandler(object):
         for dest, url in self._sources.iteritems():
             tmp_name = self._url_to_tmp_filename(url)
             cmd_str = 'wget -O %s %s' % (tmp_name, url)
-            decompress_command = self._decompress(tmp_name, dest)
-            CommandRunner(cmd_str, decompress_command).run()
             try:
                 os.makedirs(dest)
             except OSError as e:
@@ -636,6 +636,8 @@ class SourcesHandler(object):
                     LOG.debug(str(e))
                 else:
                     LOG.exception(e)
+            decompress_command = self._decompress(tmp_name, dest)
+            CommandRunner(cmd_str, decompress_command).run()
 
 
 class ServicesHandler(object):

@@ -17,6 +17,7 @@
 import boto.cloudformation as cfn
 import json
 import mox
+import os
 import subprocess
 import tempfile
 import testtools
@@ -637,3 +638,38 @@ class TestMetadataRetrieve(testtools.TestCase):
             md.retrieve(meta_str=md_data, last_path=last_file.name)
             md.cfn_init()
             self.assertThat(foo_file.name, ttm.FileContains('bar'))
+
+
+class TestSourcesHandler(MockPopenTestCase):
+    def test_apply_sources_empty(self):
+        sh = cfn_helper.SourcesHandler({})
+        sh.apply_sources()
+
+    def _test_apply_sources(self, url, end_file):
+        dest = tempfile.mkdtemp()
+        self.addCleanup(os.rmdir, dest)
+        sources = {dest: url}
+        td = os.path.dirname(end_file)
+        self.m.StubOutWithMock(tempfile, 'mkdtemp')
+        tempfile.mkdtemp().AndReturn(td)
+        cmd = ['su', 'root', '-c', 'wget -O %s %s' % (end_file, url)]
+        self.mock_cmd_run(cmd).AndReturn(FakePOpen('Wget good'))
+        cmd = ['su', 'root', '-c', 'tar -C %s -xzf %s' % (dest, end_file)]
+        self.mock_cmd_run(cmd).AndReturn(FakePOpen('Tarball good'))
+        self.m.ReplayAll()
+        sh = cfn_helper.SourcesHandler(sources)
+        sh.apply_sources()
+
+    def test_apply_sources_github(self):
+        url = "https://github.com/NoSuchProject/tarball/NoSuchTarball"
+        td = tempfile.mkdtemp()
+        self.addCleanup(os.rmdir, td)
+        end_file = '%s/NoSuchProject-NoSuchTarball.tar.gz' % td
+        self._test_apply_sources(url, end_file)
+
+    def test_apply_sources_general(self):
+        url = "https://website.no.existe/a/b/c/file.tar.gz"
+        td = tempfile.mkdtemp()
+        self.addCleanup(os.rmdir, td)
+        end_file = '%s/file.tar.gz' % td
+        self._test_apply_sources(url, end_file)
