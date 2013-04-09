@@ -570,6 +570,32 @@ class TestMetadataRetrieve(testtools.TestCase):
         self.assertDictEqual(md_data, md._metadata)
         self.assertEqual(md_str, str(md))
 
+    def test_metadata_creates_cache(self):
+        temp_home = tempfile.mkdtemp()
+
+        def cleanup_temp_home(thome):
+            os.unlink(os.path.join(thome, 'cache', 'last_metadata'))
+            os.rmdir(os.path.join(thome, 'cache'))
+            os.rmdir(os.path.join(thome))
+
+        self.addCleanup(cleanup_temp_home, temp_home)
+
+        last_path = os.path.join(temp_home, 'cache', 'last_metadata')
+        md_data = {"AWS::CloudFormation::Init": {"config": {"files": {
+            "/tmp/foo": {"content": "bar"}}}}}
+        md_str = json.dumps(md_data)
+        md = cfn_helper.Metadata('teststack', None)
+
+        self.assertFalse(os.path.exists(last_path),
+                         "last_metadata file already exists")
+        md.retrieve(meta_str=md_str, last_path=last_path)
+        self.assertTrue(os.path.exists(last_path),
+                        "last_metadata file should exist")
+        # Ensure created dirs and file have right perms
+        self.assertTrue(os.stat(last_path).st_mode & 0600 == 0600)
+        self.assertTrue(
+            os.stat(os.path.dirname(last_path)).st_mode & 0700 == 0700)
+
     def test_is_valid_metadata(self):
         md_data = {"AWS::CloudFormation::Init": {"config": {"files": {
             "/tmp/foo": {"content": "bar"}}}}}

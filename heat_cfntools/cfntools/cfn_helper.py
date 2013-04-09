@@ -1077,7 +1077,7 @@ class Metadata(object):
             self,
             meta_str=None,
             default_path='/var/lib/heat-cfntools/cfn-init-data',
-            last_path='/tmp/last_metadata'):
+            last_path='/var/cache/heat-cfntools/last_metadata'):
         """
         Read the metadata from the given filename
         """
@@ -1091,13 +1091,14 @@ class Metadata(object):
 
                 # If reading remote metadata fails, we fall-back on local files
                 # in order to get the most up-to-date version, we try:
-                # /tmp/last_metadata, followed by
+                # /var/cache/heat-cfntools/last_metadata, followed by
                 # /var/lib/heat-cfntools/cfn-init-data
                 # This should allow us to do the right thing both during the
                 # first cfn-init run (when we only have cfn-init-data), and
                 # in the event of a temporary interruption to connectivity
-                # affecting cfn-hup, in which case we want to use last_metadata
-                # or the logic below could re-run a stale cfn-init-data
+                # affecting cfn-hup, in which case we want to use the locally
+                # cached metadata or the logic below could re-run a stale
+                # cfn-init-data
                 fd = None
                 for filepath in [last_path, default_path]:
                     try:
@@ -1136,6 +1137,15 @@ class Metadata(object):
         if old_md5 != current_md5:
             self._has_changed = True
 
+        # if cache dir does not exist try to create it
+        cache_dir = os.path.dirname(last_path)
+        if not os.path.isdir(cache_dir):
+            try:
+                os.makedirs(cache_dir, mode=0700)
+            except IOError as e:
+                LOG.warn('could not create metadata cache dir %s [%s]' %
+                         (cache_dir, e))
+                return
         # save current metadata to file
         tmp_mdpath = last_path
         with open(tmp_mdpath, 'w+') as cf:
