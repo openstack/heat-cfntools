@@ -18,6 +18,4 @@ cfn-hup    - Handle updates from the UpdateStack CloudFormation API call
 
 Related projects
 ----------------
-* http://www.heat-api.org
 * http://wiki.openstack.org/Heat
-
