@@ -1147,10 +1147,13 @@ class Metadata(object):
                          (cache_dir, e))
                 return
         # save current metadata to file
-        tmp_mdpath = last_path
-        with open(tmp_mdpath, 'w+') as cf:
-            os.chmod(tmp_mdpath, 0600)
+        tmp_dir = os.path.dirname(last_path)
+        with tempfile.NamedTemporaryFile(dir=tmp_dir,
+                                         mode='wb',
+                                         delete=False) as cf:
+            os.chmod(cf.name, 0600)
             cf.write(json.dumps(self._metadata))
+            os.rename(cf.name, last_path)
 
     def __str__(self):
         return json.dumps(self._metadata)
