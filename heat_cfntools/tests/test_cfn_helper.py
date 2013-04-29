@@ -345,15 +345,15 @@ interval=120''' % fcreds.name)
         fcreds.close()
 
     def test_hup_config(self):
-        self.mock_cmd_run(['su', 'root', '-c', '/bin/hook2']).AndReturn(
-            FakePOpen('All good'))
-        self.mock_cmd_run(['su', 'root', '-c', '/bin/hook1']).AndReturn(
-            FakePOpen('All good'))
-        self.mock_cmd_run(['su', 'root', '-c', '/bin/hook3']).AndReturn(
-            FakePOpen('All good'))
         self.mock_cmd_run(
             ['su', 'root', '-c', '/bin/cfn-http-restarted']).AndReturn(
                 FakePOpen('All good'))
+        self.mock_cmd_run(['su', 'root', '-c', '/bin/hook1']).AndReturn(
+            FakePOpen('All good'))
+        self.mock_cmd_run(['su', 'root', '-c', '/bin/hook2']).AndReturn(
+            FakePOpen('All good'))
+        self.mock_cmd_run(['su', 'root', '-c', '/bin/hook3']).AndReturn(
+            FakePOpen('All good'))
         self.m.ReplayAll()
 
         hooks_conf = tempfile.NamedTemporaryFile()
@@ -406,28 +406,30 @@ interval=120''' % fcreds.name)
             open(hooks_conf.name)])
         unique_resources = mainconfig.unique_resources_get()
         self.assertThat([
-            'resource2',
+            'resource',
             'resource1',
+            'resource2',
             'resource3',
-            'resource'
-        ], ttm.Equals(unique_resources))
+        ], ttm.Equals(sorted(unique_resources)))
 
-        hooks = mainconfig.hooks
+        hooks = sorted(mainconfig.hooks,
+                       key=lambda hook: hook.resource_name_get())
+        self.assertEqual(len(hooks), 4)
         self.assertEqual(
-            '{hook2, service2.restarted, Resources.resource2.Metadata,'
-            ' root, /bin/hook2}', str(hooks[0]))
+            '{cfn-http-restarted, service.restarted,'
+            ' Resources.resource.Metadata, root, /bin/cfn-http-restarted}',
+            str(hooks[0]))
         self.assertEqual(
             '{hook1, service1.restarted, Resources.resource1.Metadata,'
             ' root, /bin/hook1}', str(hooks[1]))
         self.assertEqual(
-            '{hook3, service3.restarted, Resources.resource3.Metadata,'
-            ' root, /bin/hook3}', str(hooks[2]))
+            '{hook2, service2.restarted, Resources.resource2.Metadata,'
+            ' root, /bin/hook2}', str(hooks[2]))
         self.assertEqual(
-            '{cfn-http-restarted, service.restarted,'
-            ' Resources.resource.Metadata, root, /bin/cfn-http-restarted}',
-            str(hooks[3]))
+            '{hook3, service3.restarted, Resources.resource3.Metadata,'
+            ' root, /bin/hook3}', str(hooks[3]))
 
-        for hook in mainconfig.hooks:
+        for hook in hooks:
             hook.event(hook.triggers, None, hook.resource_name_get())
 
         hooks_conf.close()
