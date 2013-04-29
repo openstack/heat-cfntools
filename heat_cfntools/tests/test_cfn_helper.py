@@ -18,6 +18,7 @@ import boto.cloudformation as cfn
 import json
 import mox
 import os
+import sys
 import subprocess
 import tempfile
 import testtools
@@ -338,12 +339,9 @@ region=region1
 credential-file=%s-invalid
 interval=120''' % fcreds.name)
         main_conf.flush()
-        self.assertRaisesRegexp(
-            Exception,
-            'invalid credentials file',
-            cfn_helper.HupConfig,
-            [open(main_conf.name)])
-
+        e = self.assertRaises(Exception, cfn_helper.HupConfig,
+                              [open(main_conf.name)])
+        self.assertIn('invalid credentials file', str(e))
         fcreds.close()
 
     def test_hup_config(self):
@@ -407,12 +405,12 @@ interval=120''' % fcreds.name)
             open(main_conf.name),
             open(hooks_conf.name)])
         unique_resources = mainconfig.unique_resources_get()
-        self.assertSequenceEqual([
+        self.assertThat([
             'resource2',
             'resource1',
             'resource3',
             'resource'
-        ], unique_resources)
+        ], ttm.Equals(unique_resources))
 
         hooks = mainconfig.hooks
         self.assertEqual(
@@ -493,7 +491,7 @@ class TestCfnHelper(testtools.TestCase):
                 fcreds.write(file_contents)
                 fcreds.flush()
                 creds = cfn_helper.parse_creds_file(fcreds.name)
-                self.assertDictEqual(creds_match, creds)
+                self.assertThat(creds_match, ttm.Equals(creds))
         parse_creds_test(
             'AWSAccessKeyId=foo\nAWSSecretKey=bar\n',
             {'AWSAccessKeyId': 'foo', 'AWSSecretKey': 'bar'}
@@ -531,13 +529,13 @@ class TestMetadataRetrieve(testtools.TestCase):
                 last_path=last_file.name)
 
             self.assertThat(last_file.name, ttm.FileContains(md_str))
-            self.assertDictEqual(md_data, md._metadata)
+            self.assertThat(md_data, ttm.Equals(md._metadata))
 
         md = cfn_helper.Metadata('teststack', None)
         md.retrieve(
             default_path=default_file.name,
             last_path=last_file.name)
-        self.assertDictEqual(md_data, md._metadata)
+        self.assertThat(md_data, ttm.Equals(md._metadata))
 
     def test_metadata_retrieve_none(self):
 
@@ -563,11 +561,11 @@ class TestMetadataRetrieve(testtools.TestCase):
 
         md = cfn_helper.Metadata('teststack', None)
         md.retrieve(meta_str=md_str, last_path=last_file.name)
-        self.assertDictEqual(md_data, md._metadata)
+        self.assertThat(md_data, ttm.Equals(md._metadata))
 
         md = cfn_helper.Metadata('teststack', None)
         md.retrieve(meta_str=md_data, last_path=last_file.name)
-        self.assertDictEqual(md_data, md._metadata)
+        self.assertThat(md_data, ttm.Equals(md._metadata))
         self.assertEqual(md_str, str(md))
 
     def test_metadata_creates_cache(self):
@@ -605,10 +603,10 @@ class TestMetadataRetrieve(testtools.TestCase):
         md = cfn_helper.Metadata('teststack', None)
         md.retrieve(meta_str=md_data, last_path=last_file.name)
 
-        self.assertDictEqual(md_data, md._metadata)
+        self.assertThat(md_data, ttm.Equals(md._metadata))
         self.assertTrue(md._is_valid_metadata())
-        self.assertDictEqual(
-            md_data['AWS::CloudFormation::Init'], md._metadata)
+        self.assertThat(
+            md_data['AWS::CloudFormation::Init'], ttm.Equals(md._metadata))
 
     def test_remote_metadata(self):
 
@@ -637,7 +635,7 @@ class TestMetadataRetrieve(testtools.TestCase):
                 access_key='foo',
                 secret_key='bar')
             md.retrieve(last_path=last_file.name)
-            self.assertDictEqual(md_data, md._metadata)
+            self.assertThat(md_data, ttm.Equals(md._metadata))
 
             with tempfile.NamedTemporaryFile(mode='w') as fcreds:
                 fcreds.write('AWSAccessKeyId=foo\nAWSSecretKey=bar\n')
@@ -645,7 +643,7 @@ class TestMetadataRetrieve(testtools.TestCase):
                 md = cfn_helper.Metadata(
                     'teststack', None, credentials_file=fcreds.name)
                 md.retrieve(last_path=last_file.name)
-            self.assertDictEqual(md_data, md._metadata)
+            self.assertThat(md_data, ttm.Equals(md._metadata))
 
             m.VerifyAll()
         finally:
