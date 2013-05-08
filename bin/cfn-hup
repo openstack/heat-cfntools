@@ -102,7 +102,7 @@ if not mainconfig.unique_resources_get():
 
 
 for r in mainconfig.unique_resources_get():
-    print r
+    LOG.debug('Checking resource %s' % r)
     metadata = Metadata(mainconfig.stack,
                         r,
                         credentials_file=mainconfig.credential_file,
