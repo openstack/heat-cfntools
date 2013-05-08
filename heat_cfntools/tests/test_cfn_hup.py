@@ -80,20 +80,9 @@ class TestCfnHup(testtools.TestCase):
         with tempfile.NamedTemporaryFile() as last_md:
             self.metadata.retrieve(last_path=last_md.name)
 
-    def test_cfn_hup_empty_metadata(self):
+    def _test_cfn_hup_metadata(self, metadata):
 
-        self._mock_retrieve_metadata({})
-
-        hooks = []
-        self.metadata.cfn_hup(hooks)
-
-        self.assertIn('Metadata does not contain a', self.logger.output)
-        self.m.VerifyAll()
-        self.m.UnsetStubs()
-
-    def test_cfn_hup_hooks(self):
-
-        self._mock_retrieve_metadata(self.init_section)
+        self._mock_retrieve_metadata(metadata)
         self.useFixture(
             fixtures.MonkeyPatch(
                 'heat_cfntools.cfntools.cfn_helper.ServicesHandler',
@@ -112,3 +101,9 @@ class TestCfnHup(testtools.TestCase):
         self.metadata.cfn_hup([hook])
         self.m.VerifyAll()
         self.m.UnsetStubs()
+
+    def test_cfn_hup_empty_metadata(self):
+        self._test_cfn_hup_metadata({})
+
+    def test_cfn_hup_cfn_init_metadata(self):
+        self._test_cfn_hup_metadata(self.init_section)

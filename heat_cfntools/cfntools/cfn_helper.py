@@ -1214,14 +1214,15 @@ class Metadata(object):
         Process the resource metadata
         """
         if not self._is_valid_metadata():
-            LOG.info('Metadata does not contain a %s section' % self._init_key)
-        else:
-            if self._is_local_metadata:
-                self._config = self._metadata["config"]
-                s = self._config.get("services")
-                sh = ServicesHandler(s, resource=self.resource, hooks=hooks)
-                sh.monitor_services()
+            LOG.debug(
+                'Metadata does not contain a %s section' % self._init_key)
 
-            if self._has_changed:
-                for h in hooks:
-                    h.event('post.update', self.resource, self.resource)
+        if self._is_local_metadata:
+            self._config = self._metadata.get("config", {})
+            s = self._config.get("services")
+            sh = ServicesHandler(s, resource=self.resource, hooks=hooks)
+            sh.monitor_services()
+
+        if self._has_changed:
+            for h in hooks:
+                h.event('post.update', self.resource, self.resource)
