@@ -41,7 +41,7 @@ import tempfile
 # Override BOTO_CONFIG, which makes boto look only at the specified
 # config file, instead of the default locations
 os.environ['BOTO_CONFIG'] = '/var/lib/heat-cfntools/cfn-boto-cfg'
-from boto.cloudformation import CloudFormationConnection
+from boto import cloudformation
 
 
 LOG = logging.getLogger(__name__)
@@ -53,8 +53,8 @@ def to_boolean(b):
 
 
 def parse_creds_file(path='/etc/cfn/cfn-credentials'):
-    '''
-    Parse the cfn credentials file
+    '''Parse the cfn credentials file.
+
     Default location is as specified, and it is expected to contain
     exactly two keys "AWSAccessKeyId" and "AWSSecretKey)
     The two keys are returned a dict (if found)
@@ -116,7 +116,7 @@ class HupConfig(object):
         resources = []
         for h in self.hooks:
             r = h.resource_name_get()
-            if not r in resources:
+            if r not in resources:
                 resources.append(h.resource_name_get())
         return resources
 
@@ -151,9 +151,7 @@ class Hook(object):
 
 
 class CommandRunner(object):
-    """
-    Helper class to run a command and store the output.
-    """
+    """Helper class to run a command and store the output."""
 
     def __init__(self, command, nextcommand=None):
         self._command = command
@@ -174,8 +172,7 @@ class CommandRunner(object):
         return s
 
     def run(self, user='root', cwd=None, env=None):
-        """
-        Run the Command and return the output.
+        """Run the Command and return the output.
 
         Returns:
             self
@@ -216,15 +213,12 @@ class RpmHelper(object):
 
     @classmethod
     def prepcache(cls):
-        """
-        Prepare the yum cache
-        """
+        """Prepare the yum cache."""
         CommandRunner("yum -y makecache").run()
 
     @classmethod
     def compare_rpm_versions(cls, v1, v2):
-        """
-        Compare two RPM version strings.
+        """Compare two RPM version strings.
 
         Arguments:
             v1 -- a version string
@@ -246,8 +240,7 @@ class RpmHelper(object):
 
     @classmethod
     def newest_rpm_version(cls, versions):
-        """
-        Returns the highest (newest) version from a list of versions.
+        """Returns the highest (newest) version from a list of versions.
 
         Arguments:
             versions -- A list of version strings
@@ -264,8 +257,7 @@ class RpmHelper(object):
 
     @classmethod
     def rpm_package_version(cls, pkg):
-        """
-        Returns the version of an installed RPM.
+        """Returns the version of an installed RPM.
 
         Arguments:
             pkg -- A package name
@@ -276,8 +268,7 @@ class RpmHelper(object):
 
     @classmethod
     def rpm_package_installed(cls, pkg):
-        """
-        Indicates whether pkg is in rpm database.
+        """Indicates whether pkg is in rpm database.
 
         Arguments:
             pkg -- A package name (with optional version and release spec).
@@ -290,8 +281,7 @@ class RpmHelper(object):
 
     @classmethod
     def yum_package_available(cls, pkg):
-        """
-        Indicates whether pkg is available via yum
+        """Indicates whether pkg is available via yum.
 
         Arguments:
             pkg -- A package name (with optional version and release spec).
@@ -305,8 +295,7 @@ class RpmHelper(object):
 
     @classmethod
     def install(cls, packages, rpms=True):
-        """
-        Installs (or upgrades) a set of packages via RPM or via Yum.
+        """Installs (or upgrades) a set of packages via RPM or via Yum.
 
         Arguments:
             packages -- a list of packages to install
@@ -335,8 +324,7 @@ class RpmHelper(object):
 
     @classmethod
     def downgrade(cls, packages, rpms=True):
-        """
-        Downgrades a set of packages via RPM or via Yum.
+        """Downgrades a set of packages via RPM or via Yum.
 
         Arguments:
             packages -- a list of packages to downgrade
@@ -384,9 +372,7 @@ class PackagesHandler(object):
         self._packages = packages
 
     def _handle_gem_packages(self, packages):
-        """
-        very basic support for gems
-        """
+        """very basic support for gems."""
         # TODO(asalkeld) support versions
         # -b == local & remote install
         # -y == install deps
@@ -401,18 +387,14 @@ class PackagesHandler(object):
                 CommandRunner('gem install %s %s' % (opts, pkg_name)).run()
 
     def _handle_python_packages(self, packages):
-        """
-        very basic support for easy_install
-        """
+        """very basic support for easy_install."""
         # TODO(asalkeld) support versions
         for pkg_name, versions in packages.iteritems():
             cmd_str = 'easy_install %s' % (pkg_name)
             CommandRunner(cmd_str).run()
 
     def _handle_yum_packages(self, packages):
-        """
-        Handle installation, upgrade, or downgrade of a set of
-        packages via yum.
+        """Handle installation, upgrade, or downgrade of packages via yum.
 
         Arguments:
         packages -- a package entries map of the form:
@@ -459,9 +441,7 @@ class PackagesHandler(object):
                 RpmHelper.downgrade(downgrades)
 
     def _handle_rpm_packages(self, packages):
-        """
-        Handle installation, upgrade, or downgrade of a set of
-        packages via rpm.
+        """Handle installation, upgrade, or downgrade of packages via rpm.
 
         Arguments:
         packages -- a package entries map of the form:
@@ -476,9 +456,7 @@ class PackagesHandler(object):
         pass
 
     def _handle_apt_packages(self, packages):
-        """
-        very basic support for apt
-        """
+        """very basic support for apt."""
         # TODO(asalkeld) support versions
         pkg_list = ' '.join([p for p in packages])
 
@@ -499,8 +477,8 @@ class PackagesHandler(object):
         return handler
 
     def apply_packages(self):
-        """
-        Install, upgrade, or downgrade packages listed
+        """Install, upgrade, or downgrade packages listed.
+
         Each package is a dict containing package name and a list of versions
         Install order:
           * dpkg
@@ -558,14 +536,14 @@ class FilesHandler(object):
                 try:
                     user_info = pwd.getpwnam(meta['owner'])
                     uid = user_info[2]
-                except KeyError as ex:
+                except KeyError:
                     pass
 
             if 'group' in meta:
                 try:
                     group_info = grp.getgrnam(meta['group'])
                     gid = group_info[2]
-                except KeyError as ex:
+                except KeyError:
                     pass
 
             os.chown(dest, uid, gid)
@@ -574,9 +552,7 @@ class FilesHandler(object):
 
 
 class SourcesHandler(object):
-    '''
-    tar, tar+gzip,tar+bz2 and zip
-    '''
+    '''tar, tar+gzip,tar+bz2 and zip.'''
     _sources = {}
 
     def __init__(self, sources):
@@ -741,9 +717,7 @@ class ServicesHandler(object):
         return handler
 
     def apply_services(self):
-        """
-        Starts, stops, enables, disables services
-        """
+        """Starts, stops, enables, disables services."""
         if not self._services:
             return
         for manager, service_entries in self._services.iteritems():
@@ -754,9 +728,7 @@ class ServicesHandler(object):
                 self._initialize_services(handler, service_entries)
 
     def monitor_services(self):
-        """
-        Restarts failed services, and runs hooks.
-        """
+        """Restarts failed services, and runs hooks."""
         if not self._services:
             return
         for manager, service_entries in self._services.iteritems():
@@ -789,9 +761,7 @@ class ConfigsetsHandler(object):
                 executionlist.append(elem)
 
     def get_configsets(self):
-        """
-        Returns a list of Configsets to execute in template
-        """
+        """Returns a list of Configsets to execute in template."""
         if not self.configsets:
             if self.selectedsets:
                 raise Exception('Template has no configSets')
@@ -818,9 +788,9 @@ class ConfigsetsHandler(object):
 
 def metadata_server_port(
         datafile='/var/lib/heat-cfntools/cfn-metadata-server'):
-    """
-    Return the the metadata server port
-    reads the :NNNN from the end of the URL in cfn-metadata-server
+    """Return the the metadata server port.
+
+    Reads the :NNNN from the end of the URL in cfn-metadata-server
     """
     try:
         f = open(datafile)
@@ -847,9 +817,7 @@ class CommandsHandler(object):
         self.commands = commands
 
     def apply_commands(self):
-        """
-        Execute commands on the instance in alphabetical order by name.
-        """
+        """Execute commands on the instance in alphabetical order by name."""
         if not self.commands:
             return
         for command_label in sorted(self.commands):
@@ -914,9 +882,7 @@ class GroupsHandler(object):
         self.groups = groups
 
     def apply_groups(self):
-        """
-        Create Linux/UNIX groups and assign group IDs
-        """
+        """Create Linux/UNIX groups and assign group IDs."""
         if not self.groups:
             return
         for group, properties in self.groups.iteritems():
@@ -960,9 +926,7 @@ class UsersHandler(object):
         self.users = users
 
     def apply_users(self):
-        """
-        Create Linux/UNIX users and assign user IDs, groups and homedir
-        """
+        """Create Linux/UNIX users and assign user IDs, groups and homedir."""
         if not self.users:
             return
         for user, properties in self.users.iteritems():
@@ -1043,9 +1007,7 @@ class Metadata(object):
         self._has_changed = False
 
     def remote_metadata(self):
-        """
-        Connect to the metadata server and retreive the metadata from there.
-        """
+        """Connect to the metadata server and retreive the metadata."""
 
         if self.credentials_file:
             credentials = parse_creds_file(self.credentials_file)
@@ -1059,10 +1021,11 @@ class Metadata(object):
 
         port = metadata_server_port() or self.DEFAULT_PORT
 
-        client = CloudFormationConnection(aws_access_key_id=access_key,
-                                          aws_secret_access_key=secret_key,
-                                          is_secure=False, port=port,
-                                          path="/v1", debug=0)
+        client = cloudformation.CloudFormationConnection(
+            aws_access_key_id=access_key,
+            aws_secret_access_key=secret_key,
+            is_secure=False, port=port,
+            path="/v1", debug=0)
 
         res = client.describe_stack_resource(self.stack, self.resource)
         # Note pending upstream patch will make this response a
@@ -1078,9 +1041,7 @@ class Metadata(object):
             meta_str=None,
             default_path='/var/lib/heat-cfntools/cfn-init-data',
             last_path='/var/cache/heat-cfntools/last_metadata'):
-        """
-        Read the metadata from the given filename
-        """
+        """Read the metadata from the given filename."""
         if meta_str:
             self._data = meta_str
         else:
@@ -1159,9 +1120,7 @@ class Metadata(object):
         return json.dumps(self._metadata)
 
     def _is_valid_metadata(self):
-        """
-        Should find the AWS::CloudFormation::Init json key
-        """
+        """Should find the AWS::CloudFormation::Init json key."""
         is_valid = self._metadata and \
             self._init_key in self._metadata and \
             self._metadata[self._init_key]
@@ -1170,8 +1129,8 @@ class Metadata(object):
         return is_valid
 
     def _process_config(self, config="config"):
-        """
-        Parse and process a config section
+        """Parse and process a config section.
+
           * packages
           * sources
           * groups
@@ -1195,9 +1154,7 @@ class Metadata(object):
         ServicesHandler(self._config.get("services")).apply_services()
 
     def cfn_init(self):
-        """
-        Process the resource metadata
-        """
+        """Process the resource metadata."""
         if not self._is_valid_metadata():
             raise Exception("invalid metadata")
         else:
@@ -1210,9 +1167,7 @@ class Metadata(object):
                     self._process_config(item)
 
     def cfn_hup(self, hooks):
-        """
-        Process the resource metadata
-        """
+        """Process the resource metadata."""
         if not self._is_valid_metadata():
             LOG.debug(
                 'Metadata does not contain a %s section' % self._init_key)

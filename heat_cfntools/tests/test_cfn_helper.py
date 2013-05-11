@@ -18,7 +18,6 @@ import boto.cloudformation as cfn
 import json
 import mox
 import os
-import sys
 import subprocess
 import tempfile
 import testtools
