@@ -92,6 +92,13 @@ parser.add_argument('--heartbeat', required=False, action='store_true',
                     help='Sends a Heartbeat.')
 parser.add_argument('--watch', required=True,
                     help='the name of the watch to post to.')
+parser.add_argument('--metric', required=False,
+                    help='name of the metric to post to.')
+parser.add_argument('--units', required=False,
+                    help='name of the units to be used for the specified'
+                    'metric')
+parser.add_argument('--value', required=False,
+                    help='value to post to the specified metric')
 args = parser.parse_args()
 
 LOG.debug('cfn-push-stats called %s ' % (str(args)))
@@ -100,6 +107,13 @@ credentials = parse_creds_file(args.credential_file)
 
 namespace = 'system/linux'
 data = {}
+
+# Generic user-specified metric
+# =============================
+if args.metric and args.units and args.value:
+    data[args.metric] = {
+        'Value': args.value,
+        'Units': args.units}
 
 # service failure
 # ===============
