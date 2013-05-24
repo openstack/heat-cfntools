@@ -528,17 +528,16 @@ class TestMetadataRetrieve(testtools.TestCase):
             default_file.flush()
             self.assertThat(default_file.name, ttm.FileContains(md_str))
 
-            md.retrieve(
-                default_path=default_file.name,
-                last_path=self.last_file)
+            self.assertTrue(
+                md.retrieve(default_path=default_file.name,
+                            last_path=self.last_file))
 
             self.assertThat(self.last_file, ttm.FileContains(md_str))
             self.assertThat(md_data, ttm.Equals(md._metadata))
 
         md = cfn_helper.Metadata('teststack', None)
-        md.retrieve(
-            default_path=default_file.name,
-            last_path=self.last_file)
+        self.assertTrue(md.retrieve(default_path=default_file.name,
+                                    last_path=self.last_file))
         self.assertThat(md_data, ttm.Equals(md._metadata))
 
     def test_metadata_retrieve_none(self):
@@ -546,10 +545,16 @@ class TestMetadataRetrieve(testtools.TestCase):
         md = cfn_helper.Metadata('teststack', None)
         default_file = os.path.join(self.tdir.path, 'default_file')
 
-        md.retrieve(
-            default_path=default_file,
-            last_path=self.last_file)
+        self.assertFalse(md.retrieve(default_path=default_file,
+                                     last_path=self.last_file))
         self.assertIsNone(md._metadata)
+
+        displayed = self.useFixture(fixtures.StringStream('stdout'))
+        fake_stdout = displayed.stream
+        self.useFixture(fixtures.MonkeyPatch('sys.stdout', fake_stdout))
+        md.display()
+        fake_stdout.flush()
+        self.assertEqual(displayed.getDetails()['stdout'].as_text(), "")
 
     def test_metadata_retrieve_passed(self):
 
@@ -558,13 +563,25 @@ class TestMetadataRetrieve(testtools.TestCase):
         md_str = json.dumps(md_data)
 
         md = cfn_helper.Metadata('teststack', None)
-        md.retrieve(meta_str=md_str, last_path=self.last_file)
+        self.assertTrue(md.retrieve(meta_str=md_str,
+                                    last_path=self.last_file))
         self.assertThat(md_data, ttm.Equals(md._metadata))
 
         md = cfn_helper.Metadata('teststack', None)
-        md.retrieve(meta_str=md_data, last_path=self.last_file)
+        self.assertTrue(md.retrieve(meta_str=md_data,
+                                    last_path=self.last_file))
         self.assertThat(md_data, ttm.Equals(md._metadata))
         self.assertEqual(md_str, str(md))
+
+        displayed = self.useFixture(fixtures.StringStream('stdout'))
+        fake_stdout = displayed.stream
+        self.useFixture(fixtures.MonkeyPatch('sys.stdout', fake_stdout))
+        md.display()
+        fake_stdout.flush()
+        self.assertEqual(displayed.getDetails()['stdout'].as_text(),
+                         "{\"AWS::CloudFormation::Init\": {\"config\": {"
+                         "\"files\": {\"/tmp/foo\": {\"content\": \"bar\"}"
+                         "}}}}\n")
 
     def test_metadata_creates_cache(self):
         temp_home = tempfile.mkdtemp()
@@ -584,7 +601,7 @@ class TestMetadataRetrieve(testtools.TestCase):
 
         self.assertFalse(os.path.exists(last_path),
                          "last_metadata file already exists")
-        md.retrieve(meta_str=md_str, last_path=last_path)
+        self.assertTrue(md.retrieve(meta_str=md_str, last_path=last_path))
         self.assertTrue(os.path.exists(last_path),
                         "last_metadata file should exist")
         # Ensure created dirs and file have right perms
@@ -597,7 +614,8 @@ class TestMetadataRetrieve(testtools.TestCase):
             "/tmp/foo": {"content": "bar"}}}}}
 
         md = cfn_helper.Metadata('teststack', None)
-        md.retrieve(meta_str=md_data, last_path=self.last_file)
+        self.assertTrue(
+            md.retrieve(meta_str=md_data, last_path=self.last_file))
 
         self.assertThat(md_data, ttm.Equals(md._metadata))
         self.assertTrue(md._is_valid_metadata())
@@ -627,7 +645,7 @@ class TestMetadataRetrieve(testtools.TestCase):
                 None,
                 access_key='foo',
                 secret_key='bar')
-            md.retrieve(last_path=self.last_file)
+            self.assertTrue(md.retrieve(last_path=self.last_file))
             self.assertThat(md_data, ttm.Equals(md._metadata))
 
             with tempfile.NamedTemporaryFile(mode='w') as fcreds:
@@ -635,7 +653,7 @@ class TestMetadataRetrieve(testtools.TestCase):
                 fcreds.flush()
                 md = cfn_helper.Metadata(
                     'teststack', None, credentials_file=fcreds.name)
-                md.retrieve(last_path=self.last_file)
+                self.assertTrue(md.retrieve(last_path=self.last_file))
             self.assertThat(md_data, ttm.Equals(md._metadata))
 
             m.VerifyAll()
@@ -649,7 +667,8 @@ class TestMetadataRetrieve(testtools.TestCase):
                 foo_file.name: {"content": "bar"}}}}}
 
             md = cfn_helper.Metadata('teststack', None)
-            md.retrieve(meta_str=md_data, last_path=self.last_file)
+            self.assertTrue(
+                md.retrieve(meta_str=md_data, last_path=self.last_file))
             md.cfn_init()
             self.assertThat(foo_file.name, ttm.FileContains('bar'))
 

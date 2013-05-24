@@ -86,3 +86,4 @@ metadata = Metadata(args.stack_name,
                     credentials_file=args.credential_file)
 metadata.retrieve()
 LOG.debug(str(metadata))
+metadata.display()

@@ -1041,7 +1041,12 @@ class Metadata(object):
             meta_str=None,
             default_path='/var/lib/heat-cfntools/cfn-init-data',
             last_path='/var/cache/heat-cfntools/last_metadata'):
-        """Read the metadata from the given filename."""
+        """Read the metadata from the given filename or from the remote server.
+
+           Returns:
+               True -- success
+              False -- error
+        """
         if meta_str:
             self._data = meta_str
         else:
@@ -1116,8 +1121,15 @@ class Metadata(object):
             cf.write(json.dumps(self._metadata))
             os.rename(cf.name, last_path)
 
+        return True
+
     def __str__(self):
         return json.dumps(self._metadata)
+
+    def display(self):
+        if self._metadata is not None:
+            print str(self)
+        return
 
     def _is_valid_metadata(self):
         """Should find the AWS::CloudFormation::Init json key."""
