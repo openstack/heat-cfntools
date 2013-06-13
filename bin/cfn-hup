@@ -16,32 +16,30 @@
 Implements cfn-hup CloudFormation functionality
 """
 import argparse
-import io
 import logging
 import os
 import os.path
-import sys
 
 
-from heat_cfntools.cfntools.cfn_helper import *
+from heat_cfntools.cfntools import cfn_helper
 
 description = " "
 parser = argparse.ArgumentParser(description=description)
 parser.add_argument('-c', '--config',
-        dest="config_dir",
-        help="Hook Config Directory",
-        required=False,
-        default='/etc/cfn/hooks.d')
+                    dest="config_dir",
+                    help="Hook Config Directory",
+                    required=False,
+                    default='/etc/cfn/hooks.d')
 parser.add_argument('-f', '--no-daemon',
-        dest="no_deamon",
-        action="store_true",
-        help="Do not run as a deamon",
-        required=False)
+                    dest="no_deamon",
+                    action="store_true",
+                    help="Do not run as a deamon",
+                    required=False)
 parser.add_argument('-v', '--verbose',
-        action="store_true",
-        dest="verbose",
-        help="Verbose logging",
-        required=False)
+                    action="store_true",
+                    dest="verbose",
+                    help="Verbose logging",
+                    required=False)
 args = parser.parse_args()
 
 # Setup logging
@@ -90,7 +88,7 @@ if not config_files:
     exit(1)
 
 try:
-    mainconfig = HupConfig([main_config_file] + config_files)
+    mainconfig = cfn_helper.HupConfig([main_config_file] + config_files)
 except Exception as ex:
     LOG.error('Cannot load configuration: %s' % str(ex))
     exit(1)
@@ -103,10 +101,10 @@ if not mainconfig.unique_resources_get():
 
 for r in mainconfig.unique_resources_get():
     LOG.debug('Checking resource %s' % r)
-    metadata = Metadata(mainconfig.stack,
-                        r,
-                        credentials_file=mainconfig.credential_file,
-                        region=mainconfig.region)
+    metadata = cfn_helper.Metadata(mainconfig.stack,
+                                   r,
+                                   credentials_file=mainconfig.credential_file,
+                                   region=mainconfig.region)
     metadata.retrieve()
     try:
         metadata.cfn_hup(mainconfig.hooks)

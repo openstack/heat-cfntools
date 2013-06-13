@@ -19,13 +19,11 @@ import argparse
 import logging
 import os
 import subprocess
-import random
-import sys
 
 # Override BOTO_CONFIG, which makes boto look only at the specified
 # config file, instead of the default locations
 os.environ['BOTO_CONFIG'] = '/var/lib/heat-cfntools/cfn-boto-cfg'
-from boto.ec2.cloudwatch import CloudWatchConnection
+from boto.ec2 import cloudwatch
 
 
 log_format = '%(levelname)s [%(asctime)s] %(message)s'
@@ -39,17 +37,17 @@ try:
     import psutil
 except ImportError:
     LOG.warn("psutil not available. If you want process and memory "
-            "statistics, you need to install it.")
+             "statistics, you need to install it.")
 
-from heat_cfntools.cfntools.cfn_helper import *
+from heat_cfntools.cfntools import cfn_helper
 
 KILO = 1024
 MEGA = 1048576
 GIGA = 1073741824
 unit_map = {'bytes': 1,
-    'kilobytes': KILO,
-    'megabytes': MEGA,
-    'gigabytes': GIGA}
+            'kilobytes': KILO,
+            'megabytes': MEGA,
+            'gigabytes': GIGA}
 
 description = " "
 parser = argparse.ArgumentParser(description=description)
@@ -63,9 +61,11 @@ parser.add_argument('--service-failure', required=False, action="store_true",
 parser.add_argument('--mem-util', required=False, action="store_true",
                     help='Reports memory utilization in percentages.')
 parser.add_argument('--mem-used', required=False, action="store_true",
-                    help='Reports memory used (excluding cache and buffers) in megabytes.')
+                    help='Reports memory used (excluding cache/buffers) '
+                         'in megabytes.')
 parser.add_argument('--mem-avail', required=False, action="store_true",
-                    help='Reports available memory (including cache and buffers) in megabytes.')
+                    help='Reports available memory (including cache/buffers) '
+                         'in megabytes.')
 parser.add_argument('--swap-util', required=False, action="store_true",
                     help='Reports swap utilization in percentages.')
 parser.add_argument('--swap-used', required=False, action="store_true",
@@ -74,7 +74,7 @@ parser.add_argument('--disk-space-util', required=False, action="store_true",
                     help='Reports disk space utilization in percentages.')
 parser.add_argument('--disk-space-used', required=False, action="store_true",
                     help='Reports allocated disk space in gigabytes.')
-parser.add_argument('--disk-space-avail',required=False, action="store_true",
+parser.add_argument('--disk-space-avail', required=False, action="store_true",
                     help='Reports available disk space in gigabytes.')
 parser.add_argument('--memory-units', required=False, default='megabytes',
                     help='Specifies units for memory metrics.')
@@ -103,7 +103,7 @@ args = parser.parse_args()
 
 LOG.debug('cfn-push-stats called %s ' % (str(args)))
 
-credentials = parse_creds_file(args.credential_file)
+credentials = cfn_helper.parse_creds_file(args.credential_file)
 
 namespace = 'system/linux'
 data = {}
@@ -185,6 +185,7 @@ if args.cpu_util:
         'Value': cpu_percent,
         'Units': 'Percent'}
 
+
 # HAProxy
 # =======
 def parse_haproxy_unix_socket(res, latency_only=False):
@@ -198,7 +199,7 @@ def parse_haproxy_unix_socket(res, latency_only=False):
 
     def add_stat(key, value, unit='Counter'):
         res[key] = {'Value': value,
-                     'Units': unit}
+                    'Units': unit}
 
     echo = subprocess.Popen(['echo', 'show stat'],
                             stdout=subprocess.PIPE)
@@ -206,8 +207,8 @@ def parse_haproxy_unix_socket(res, latency_only=False):
                              stdin=echo.stdout,
                              stdout=subprocess.PIPE)
     end_pipe = socat.stdout
-    raw = [l.strip('\n').split(',') for l in end_pipe
-                                    if l[0] != '#' and len(l) > 2]
+    raw = [l.strip('\n').split(',')
+           for l in end_pipe if l[0] != '#' and len(l) > 2]
     latency = 0
     up_count = 0
     down_count = 0
@@ -242,10 +243,10 @@ def send_stats(info):
     # Create boto connection, need the hard-coded port/path as boto
     # can't read these from config values in BOTO_CONFIG
     # FIXME : currently only http due to is_secure=False
-    client = CloudWatchConnection(
-             aws_access_key_id=credentials['AWSAccessKeyId'],
-             aws_secret_access_key=credentials['AWSSecretKey'],
-             is_secure=False, port=8003, path="/v1", debug=0)
+    client = cloudwatch.CloudWatchConnection(
+        aws_access_key_id=credentials['AWSAccessKeyId'],
+        aws_secret_access_key=credentials['AWSSecretKey'],
+        is_secure=False, port=8003, path="/v1", debug=0)
 
     # Then we send the metric datapoints passed in "info", note this could
     # contain multiple keys as the options parsed above are noe exclusive
@@ -254,7 +255,7 @@ def send_stats(info):
     metric_dims = [{'AlarmName': args.watch}]
     for key in info:
         LOG.info("Sending watch %s metric %s, Units %s, Value %s" %
-              (args.watch, key, info[key]['Units'], info[key]['Value']))
+                 (args.watch, key, info[key]['Units'], info[key]['Value']))
         client.put_metric_data(namespace=namespace,
                                name=key,
                                value=info[key]['Value'],

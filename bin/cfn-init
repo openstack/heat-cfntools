@@ -17,38 +17,36 @@ Implements cfn-init CloudFormation functionality
 """
 import argparse
 import logging
-import os
-import sys
 
 
-from heat_cfntools.cfntools.cfn_helper import *
+from heat_cfntools.cfntools import cfn_helper
 
 description = " "
 parser = argparse.ArgumentParser(description=description)
 parser.add_argument('-s', '--stack',
-        dest="stack_name",
-        help="A Heat stack name",
-        required=False)
+                    dest="stack_name",
+                    help="A Heat stack name",
+                    required=False)
 parser.add_argument('-r', '--resource',
-        dest="logical_resource_id",
-        help="A Heat logical resource ID",
-        required=False)
+                    dest="logical_resource_id",
+                    help="A Heat logical resource ID",
+                    required=False)
 parser.add_argument('--access-key',
-        dest="access_key",
-        help="A Keystone access key",
-        required=False)
+                    dest="access_key",
+                    help="A Keystone access key",
+                    required=False)
 parser.add_argument('--secret-key',
-        dest="secret_key",
-        help="A Keystone secret key",
-        required=False)
+                    dest="secret_key",
+                    help="A Keystone secret key",
+                    required=False)
 parser.add_argument('--region',
-        dest="region",
-        help="Openstack region",
-        required=False)
+                    dest="region",
+                    help="Openstack region",
+                    required=False)
 parser.add_argument('-c', '--configsets',
-        dest="configsets",
-        help="An optional list of configSets (default: default)",
-        required=False)
+                    dest="configsets",
+                    help="An optional list of configSets (default: default)",
+                    required=False)
 args = parser.parse_args()
 
 log_format = '%(levelname)s [%(asctime)s] %(message)s'
@@ -60,12 +58,12 @@ file_handler = logging.FileHandler(log_file_name)
 file_handler.setFormatter(logging.Formatter(log_format))
 LOG.addHandler(file_handler)
 
-metadata = Metadata(args.stack_name,
-                    args.logical_resource_id,
-                    access_key=args.access_key,
-                    secret_key=args.secret_key,
-                    region=args.region,
-                    configsets=args.configsets)
+metadata = cfn_helper.Metadata(args.stack_name,
+                               args.logical_resource_id,
+                               access_key=args.access_key,
+                               secret_key=args.secret_key,
+                               region=args.region,
+                               configsets=args.configsets)
 metadata.retrieve()
 try:
     metadata.cfn_init()

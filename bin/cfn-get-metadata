@@ -16,49 +16,45 @@
 Implements cfn-get-metadata CloudFormation functionality
 """
 import argparse
-import io
 import logging
-import os
-import os.path
-import sys
 
 
-from heat_cfntools.cfntools.cfn_helper import *
+from heat_cfntools.cfntools import cfn_helper
 
 description = " "
 parser = argparse.ArgumentParser(description=description)
 parser.add_argument('-s', '--stack',
-        dest="stack_name",
-        help="A Heat stack name",
-        required=True)
+                    dest="stack_name",
+                    help="A Heat stack name",
+                    required=True)
 parser.add_argument('-r', '--resource',
-        dest="logical_resource_id",
-        help="A Heat logical resource ID",
-        required=True)
+                    dest="logical_resource_id",
+                    help="A Heat logical resource ID",
+                    required=True)
 parser.add_argument('--access-key',
-        dest="access_key",
-        help="A Keystone access key",
-        required=False)
+                    dest="access_key",
+                    help="A Keystone access key",
+                    required=False)
 parser.add_argument('--secret-key',
-        dest="secret_key",
-        help="A Keystone secret key",
-        required=False)
+                    dest="secret_key",
+                    help="A Keystone secret key",
+                    required=False)
 parser.add_argument('--region',
-        dest="region",
-        help="Openstack region",
-        required=False)
+                    dest="region",
+                    help="Openstack region",
+                    required=False)
 parser.add_argument('--credential-file',
-        dest="credential_file",
-        help="credential-file",
-        required=False)
+                    dest="credential_file",
+                    help="credential-file",
+                    required=False)
 parser.add_argument('-u', '--url',
-        dest="url",
-        help="service url",
-        required=False)
+                    dest="url",
+                    help="service url",
+                    required=False)
 parser.add_argument('-k', '--key',
-        dest="key",
-        help="key",
-        required=False)
+                    dest="key",
+                    help="key",
+                    required=False)
 args = parser.parse_args()
 
 if not args.stack_name:
@@ -78,12 +74,12 @@ file_handler = logging.FileHandler(log_file_name)
 file_handler.setFormatter(logging.Formatter(log_format))
 LOG.addHandler(file_handler)
 
-metadata = Metadata(args.stack_name,
-                    args.logical_resource_id,
-                    access_key=args.access_key,
-                    secret_key=args.secret_key,
-                    region=args.region,
-                    credentials_file=args.credential_file)
+metadata = cfn_helper.Metadata(args.stack_name,
+                               args.logical_resource_id,
+                               access_key=args.access_key,
+                               secret_key=args.secret_key,
+                               region=args.region,
+                               credentials_file=args.credential_file)
 metadata.retrieve()
 LOG.debug(str(metadata))
 metadata.display()

@@ -26,25 +26,29 @@ def create_symlink(source_file, target_file, override=False):
         if (override):
             os.remove(target_file)
         else:
-            print '%s already exists, will not replace with symlink' % target_file
+            print('%s already exists, will not replace with symlink'
+                  % target_file)
             return
     print '%s -> %s' % (source_file, target_file)
     os.symlink(source_file, target_file)
 
+
 def check_dirs(source_dir, target_dir):
     print '%s -> %s' % (source_dir, target_dir)
-    
+
     if source_dir == target_dir:
         print 'Source and target are the same %s' % target_dir
         return False
-    
+
     if not os.path.exists(target_dir):
         try:
             os.makedirs(target_dir)
         except OSError as exc:
-            print 'Could not create target directory %s: %s' % (target_dir, exc)
+            print('Could not create target directory %s: %s'
+                  % (target_dir, exc))
             return False
     return True
+
 
 def create_symlinks(source_dir, target_dir, glob_pattern, override):
     source_files = glob.glob(os.path.join(source_dir, glob_pattern))
@@ -53,7 +57,7 @@ def create_symlinks(source_dir, target_dir, glob_pattern, override):
         create_symlink(source_file, target_file, override=override)
 
 if __name__ == '__main__':
-    description = 'Creates symlinks for the cfn-* scripts in this directory to /opt/aws/bin'
+    description = 'Creates symlinks for the cfn-* scripts to /opt/aws/bin'
     parser = argparse.ArgumentParser(description=description)
     parser.add_argument(
         '-t', '--target',
@@ -64,14 +68,16 @@ if __name__ == '__main__':
     parser.add_argument(
         '-s', '--source',
         dest="source_dir",
-        help="Source directory to create symlinks from. Defaults to the directory where this script is",
+        help="Source directory to create symlinks from. "
+             "Defaults to the directory where this script is",
         default='/usr/bin',
         required=False)
     parser.add_argument(
         '-f', '--force',
         dest="force",
         action='store_true',
-        help="If specified, will create symlinks even if there is already a target file",
+        help="If specified, will create symlinks even if "
+             "there is already a target file",
         required=False)
     args = parser.parse_args()
 

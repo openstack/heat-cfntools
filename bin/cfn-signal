@@ -17,42 +17,41 @@ Implements cfn-signal CloudFormation functionality
 """
 import argparse
 import logging
-import os
 import sys
 
 
-from heat_cfntools.cfntools.cfn_helper import *
+from heat_cfntools.cfntools import cfn_helper
 
 
 description = " "
 parser = argparse.ArgumentParser(description=description)
 parser.add_argument('-s', '--success',
-        dest="success",
-        help="signal status to report",
-        default='true',
-        required=False)
+                    dest="success",
+                    help="signal status to report",
+                    default='true',
+                    required=False)
 parser.add_argument('-r', '--reason',
-        dest="reason",
-        help="The reason for the failure",
-        default="Configuration Complete",
-        required=False)
+                    dest="reason",
+                    help="The reason for the failure",
+                    default="Configuration Complete",
+                    required=False)
 parser.add_argument('-d', '--data',
-        dest="data",
-        default="Application has completed configuration.",
-        help="The data to send",
-        required=False)
+                    dest="data",
+                    default="Application has completed configuration.",
+                    help="The data to send",
+                    required=False)
 parser.add_argument('-i', '--id',
-        dest="unique_id",
-        help="the unique id to send back to the WaitCondition",
-        default='00000',
-        required=False)
+                    dest="unique_id",
+                    help="the unique id to send back to the WaitCondition",
+                    default='00000',
+                    required=False)
 parser.add_argument('-e', '--exit',
-        dest="exit_code",
-        help="The exit code from a procecc to interpret",
-        default=None,
-        required=False)
+                    dest="exit_code",
+                    help="The exit code from a procecc to interpret",
+                    default=None,
+                    required=False)
 parser.add_argument('url',
-                   help='the url to post to')
+                    help='the url to post to')
 args = parser.parse_args()
 
 log_format = '%(levelname)s [%(asctime)s] %(message)s'
@@ -76,13 +75,13 @@ else:
         status = 'SUCCESS'
 
 body = {
-    "Status" : status,
-    "Reason" : args.reason,
-    "UniqueId" : args.unique_id,
-    "Data" : args.data
+    "Status": status,
+    "Reason": args.reason,
+    "UniqueId": args.unique_id,
+    "Data": args.data
 }
 
 cmd_str = "curl -X PUT -H \'Content-Type:\' --data-binary \'%s\' \"%s\"" % \
-           (json.dumps(body), args.url)
-command = CommandRunner(cmd_str).run()
+    (cfn_helper.json.dumps(body), args.url)
+command = cfn_helper.CommandRunner(cmd_str).run()
 sys.exit(command.status)
