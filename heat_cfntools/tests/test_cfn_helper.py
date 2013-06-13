@@ -605,9 +605,9 @@ class TestMetadataRetrieve(testtools.TestCase):
         self.assertTrue(os.path.exists(last_path),
                         "last_metadata file should exist")
         # Ensure created dirs and file have right perms
-        self.assertTrue(os.stat(last_path).st_mode & 0600 == 0600)
+        self.assertTrue(os.stat(last_path).st_mode & 0o600 == 0o600)
         self.assertTrue(
-            os.stat(os.path.dirname(last_path)).st_mode & 0700 == 0700)
+            os.stat(os.path.dirname(last_path)).st_mode & 0o700 == 0o700)
 
     def test_is_valid_metadata(self):
         md_data = {"AWS::CloudFormation::Init": {"config": {"files": {

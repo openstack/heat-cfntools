@@ -1107,7 +1107,7 @@ class Metadata(object):
         cache_dir = os.path.dirname(last_path)
         if not os.path.isdir(cache_dir):
             try:
-                os.makedirs(cache_dir, mode=0700)
+                os.makedirs(cache_dir, mode=0o700)
             except IOError as e:
                 LOG.warn('could not create metadata cache dir %s [%s]' %
                          (cache_dir, e))
@@ -1117,7 +1117,7 @@ class Metadata(object):
         with tempfile.NamedTemporaryFile(dir=tmp_dir,
                                          mode='wb',
                                          delete=False) as cf:
-            os.chmod(cf.name, 0600)
+            os.chmod(cf.name, 0o600)
             cf.write(json.dumps(self._metadata))
             os.rename(cf.name, last_path)
 
