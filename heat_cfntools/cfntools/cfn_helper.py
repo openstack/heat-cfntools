@@ -18,7 +18,7 @@ Not implemented yet:
     * command line args
       - placeholders are ignored
 """
-
+import atexit
 import ConfigParser
 import errno
 import grp
@@ -35,6 +35,7 @@ try:
 except ImportError:
     rpmutils_present = False
 import re
+import shutil
 import subprocess
 import tempfile
 
@@ -560,6 +561,7 @@ class SourcesHandler(object):
 
     def _url_to_tmp_filename(self, url):
         tempdir = tempfile.mkdtemp()
+        atexit.register(lambda: shutil.rmtree(tempdir, True))
         sp = url.split('/')
         if 'https://github.com' in url:
             if 'zipball' == sp[-2]:
