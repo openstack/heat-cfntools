@@ -36,7 +36,7 @@ parser.add_argument('-r', '--reason',
         help="The reason for the failure",
         default="Configuration Complete",
         required=False)
-parser.add_argument('--data',
+parser.add_argument('-d', '--data',
         dest="data",
         default="Application has completed configuration.",
         help="The data to send",
