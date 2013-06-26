@@ -573,49 +573,60 @@ class SourcesHandler(object):
 
         return '%s/%s' % (tempdir, sp[-1])
 
-    def _decompress(self, archive, dest_dir):
-        cmd_str = ''
-        LOG.debug("Decompressing")
-        (r, ext) = os.path.splitext(archive)
-        if ext == '.tgz':
-            cmd_str = 'tar -C %s -xzf %s' % (dest_dir, archive)
-        elif ext == '.tbz2':
-            cmd_str = 'tar -C %s -xjf %s' % (dest_dir, archive)
-        elif ext == '.zip':
-            cmd_str = 'unzip -d %s %s' % (dest_dir, archive)
-        elif ext == '.tar':
-            cmd_str = 'tar -C %s -xf %s' % (dest_dir, archive)
-        elif ext == '.gz':
-            (r, ext) = os.path.splitext(r)
-            if ext:
-                cmd_str = 'tar -C %s -xzf %s' % (dest_dir, archive)
-            else:
-                cmd_str = 'gunzip -c %s > %s' % (archive, dest_dir)
-        elif ext == 'bz2':
-            (r, ext) = os.path.splitext(r)
-            if ext:
-                cmd_str = 'tar -C %s -xjf %s' % (dest_dir, archive)
-            else:
-                cmd_str = 'bunzip2 -c %s > %s' % (archive, dest_dir)
+    def _splitext(self, path):
+        (r, ext) = os.path.splitext(path)
+        return (r, ext.lower())
+
+    def _source_type(self, name):
+        (r, ext) = self._splitext(name)
+        if ext == '.gz':
+            (r, ext2) = self._splitext(r)
+            if ext2 == '.tar':
+                ext = '.tgz'
+        elif ext == '.bz2':
+            (r, ext2) = self._splitext(r)
+            if ext2 == '.tar':
+                ext = '.tbz2'
+        return ext
+
+    def _apply_source_cmd(self, dest, url):
+        cmd = ""
+        basename = os.path.basename(url)
+        stype = self._source_type(basename)
+        if stype == '.tgz':
+            cmd = "wget -q -O - '%s' | gunzip | tar -xvf -" % url
+        elif stype == '.tbz2':
+            cmd = "wget -q -O - '%s' | bunzip2 | tar -xvf -" % url
+        elif stype == '.zip':
+            tmp = self._url_to_tmp_filename(url)
+            cmd = "wget -q -O '%s' '%s' && unzip -o '%s'" % (tmp, url, tmp)
+        elif stype == '.tar':
+            cmd = "wget -q -O - '%s' | tar -xvf -" % url
+        elif stype == '.gz':
+            (r, ext) = self._splitext(basename)
+            cmd = "wget -q -O - '%s' | gunzip > '%s'" % (url, r)
+        elif stype == '.bz2':
+            (r, ext) = self._splitext(basename)
+            cmd = "wget -q -O - '%s' | bunzip2 > '%s'" % (url, r)
         else:
             pass
-        return CommandRunner(cmd_str)
+
+        if cmd != '':
+            cmd = "mkdir -p '%s'; cd '%s'; %s" % (dest, dest, cmd)
+
+        return cmd
+
+    def _apply_source(self, dest, url):
+        cmd = self._apply_source_cmd(dest, url)
+        if cmd != '':
+            runner = CommandRunner(cmd)
+            runner.run()
 
     def apply_sources(self):
         if not self._sources:
             return
         for dest, url in self._sources.iteritems():
-            tmp_name = self._url_to_tmp_filename(url)
-            cmd_str = 'wget -O %s %s' % (tmp_name, url)
-            try:
-                os.makedirs(dest)
-            except OSError as e:
-                if e.errno == errno.EEXIST:
-                    LOG.debug(str(e))
-                else:
-                    LOG.exception(e)
-            decompress_command = self._decompress(tmp_name, dest)
-            CommandRunner(cmd_str, decompress_command).run()
+            self._apply_source(dest, url)
 
 
 class ServicesHandler(object):

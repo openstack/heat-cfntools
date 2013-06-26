@@ -685,10 +685,10 @@ class TestSourcesHandler(MockPopenTestCase):
         td = os.path.dirname(end_file)
         self.m.StubOutWithMock(tempfile, 'mkdtemp')
         tempfile.mkdtemp().AndReturn(td)
-        cmd = ['su', 'root', '-c', 'wget -O %s %s' % (end_file, url)]
+        er = "mkdir -p '%s'; cd '%s'; wget -q -O - '%s' | gunzip | tar -xvf -"
+        cmd = ['su', 'root', '-c',
+               er % (dest, dest, url)]
         self.mock_cmd_run(cmd).AndReturn(FakePOpen('Wget good'))
-        cmd = ['su', 'root', '-c', 'tar -C %s -xzf %s' % (dest, end_file)]
-        self.mock_cmd_run(cmd).AndReturn(FakePOpen('Tarball good'))
         self.m.ReplayAll()
         sh = cfn_helper.SourcesHandler(sources)
         sh.apply_sources()
@@ -706,3 +706,47 @@ class TestSourcesHandler(MockPopenTestCase):
         self.addCleanup(os.rmdir, td)
         end_file = '%s/file.tar.gz' % td
         self._test_apply_sources(url, end_file)
+
+    def test_apply_source_cmd(self):
+        sh = cfn_helper.SourcesHandler({})
+        er = "mkdir -p '%s'; cd '%s'; wget -q -O - '%s' | %s | tar -xvf -"
+        dest = '/tmp'
+        # test tgz
+        url = 'http://www.example.com/a.tgz'
+        cmd = sh._apply_source_cmd(dest, url)
+        self.assertEqual(er % (dest, dest, url, "gunzip"), cmd)
+        # test tar.gz
+        url = 'http://www.example.com/a.tar.gz'
+        cmd = sh._apply_source_cmd(dest, url)
+        self.assertEqual(er % (dest, dest, url, "gunzip"), cmd)
+        # test tbz2
+        url = 'http://www.example.com/a.tbz2'
+        cmd = sh._apply_source_cmd(dest, url)
+        self.assertEqual(er % (dest, dest, url, "bunzip2"), cmd)
+        # test tar.bz2
+        url = 'http://www.example.com/a.tar.bz2'
+        cmd = sh._apply_source_cmd(dest, url)
+        self.assertEqual(er % (dest, dest, url, "bunzip2"), cmd)
+        # test zip
+        er = "mkdir -p '%s'; cd '%s'; wget -q -O '%s' '%s' && unzip -o '%s'"
+        url = 'http://www.example.com/a.zip'
+        d = "/tmp/tmp2I0yNK"
+        tmp = "%s/a.zip" % d
+        self.m.StubOutWithMock(tempfile, 'mkdtemp')
+        tempfile.mkdtemp().AndReturn(d)
+        self.m.ReplayAll()
+        cmd = sh._apply_source_cmd(dest, url)
+        self.assertEqual(er % (dest, dest, tmp, url, tmp), cmd)
+        # test gz
+        er = "mkdir -p '%s'; cd '%s'; wget -q -O - '%s' | %s > '%s'"
+        url = 'http://www.example.com/a.sh.gz'
+        cmd = sh._apply_source_cmd(dest, url)
+        self.assertEqual(er % (dest, dest, url, "gunzip", "a.sh"), cmd)
+        # test bz2
+        url = 'http://www.example.com/a.sh.bz2'
+        cmd = sh._apply_source_cmd(dest, url)
+        self.assertEqual(er % (dest, dest, url, "bunzip2", "a.sh"), cmd)
+        # test other
+        url = 'http://www.example.com/a.sh'
+        cmd = sh._apply_source_cmd(dest, url)
+        self.assertEqual("", cmd)
