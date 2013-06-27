@@ -6,3 +6,5 @@ heat_cfntools.egg-info/
 .testrepository/
 subunit.log
 .tox
+AUTHORS
+ChangeLog
