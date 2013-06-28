@@ -719,6 +719,14 @@ class TestSourcesHandler(MockPopenTestCase):
         url = 'http://www.example.com/a.tar.gz'
         cmd = sh._apply_source_cmd(dest, url)
         self.assertEqual(er % (dest, dest, url, "gunzip"), cmd)
+        # test github - tarball 1
+        url = 'https://github.com/openstack/heat-cfntools/tarball/master'
+        cmd = sh._apply_source_cmd(dest, url)
+        self.assertEqual(er % (dest, dest, url, "gunzip"), cmd)
+        # test github - tarball 2
+        url = 'https://github.com/openstack/heat-cfntools/tarball/master/'
+        cmd = sh._apply_source_cmd(dest, url)
+        self.assertEqual(er % (dest, dest, url, "gunzip"), cmd)
         # test tbz2
         url = 'http://www.example.com/a.tbz2'
         cmd = sh._apply_source_cmd(dest, url)

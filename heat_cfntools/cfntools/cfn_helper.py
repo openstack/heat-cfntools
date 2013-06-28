@@ -562,23 +562,31 @@ class SourcesHandler(object):
     def _url_to_tmp_filename(self, url):
         tempdir = tempfile.mkdtemp()
         atexit.register(lambda: shutil.rmtree(tempdir, True))
-        sp = url.split('/')
-        if 'https://github.com' in url:
-            if 'zipball' == sp[-2]:
-                return '%s/%s-%s.zip' % (tempdir, sp[-3], sp[-1])
-            elif 'tarball' == sp[-2]:
-                return '%s/%s-%s.tar.gz' % (tempdir, sp[-3], sp[-1])
-            else:
-                pass
-
-        return '%s/%s' % (tempdir, sp[-1])
+        name = os.path.basename(url)
+        return os.path.join(tempdir, name)
 
     def _splitext(self, path):
         (r, ext) = os.path.splitext(path)
         return (r, ext.lower())
 
-    def _source_type(self, name):
-        (r, ext) = self._splitext(name)
+    def _github_ball_type(self, url):
+        ext = ""
+        if url.endswith('/'):
+            url = url[0:-1]
+        sp = url.split('/')
+        if len(sp) > 2:
+            http = sp[0].startswith('http')
+            github = sp[2].endswith('github.com')
+            btype = sp[-2]
+            if http and github:
+                if 'zipball' == btype:
+                    ext = '.zip'
+                elif 'tarball' == btype:
+                    ext = '.tgz'
+        return ext
+
+    def _source_type(self, url):
+        (r, ext) = self._splitext(url)
         if ext == '.gz':
             (r, ext2) = self._splitext(r)
             if ext2 == '.tar':
@@ -587,12 +595,15 @@ class SourcesHandler(object):
             (r, ext2) = self._splitext(r)
             if ext2 == '.tar':
                 ext = '.tbz2'
+        elif ext == "":
+            ext = self._github_ball_type(url)
+
         return ext
 
     def _apply_source_cmd(self, dest, url):
         cmd = ""
         basename = os.path.basename(url)
-        stype = self._source_type(basename)
+        stype = self._source_type(url)
         if stype == '.tgz':
             cmd = "wget -q -O - '%s' | gunzip | tar -xvf -" % url
         elif stype == '.tbz2':
@@ -608,8 +619,6 @@ class SourcesHandler(object):
         elif stype == '.bz2':
             (r, ext) = self._splitext(basename)
             cmd = "wget -q -O - '%s' | bunzip2 > '%s'" % (url, r)
-        else:
-            pass
 
         if cmd != '':
             cmd = "mkdir -p '%s'; cd '%s'; %s" % (dest, dest, cmd)
