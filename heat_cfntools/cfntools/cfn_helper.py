@@ -461,7 +461,8 @@ class PackagesHandler(object):
         # TODO(asalkeld) support versions
         pkg_list = ' '.join([p for p in packages])
 
-        cmd_str = 'apt-get -y install %s' % pkg_list
+        cmd_str = 'DEBIAN_FRONTEND=noninteractive apt-get -y install %s' % \
+                  pkg_list
         CommandRunner(cmd_str).run()
 
     # map of function pointers to handle different package managers
