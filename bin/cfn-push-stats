@@ -90,7 +90,7 @@ parser.add_argument('--haproxy-latency', required=False, action='store_true',
                     help='Reports HAProxy latency')
 parser.add_argument('--heartbeat', required=False, action='store_true',
                     help='Sends a Heartbeat.')
-parser.add_argument('--watch', required=True,
+parser.add_argument('--watch', required=False,
                     help='the name of the watch to post to.')
 parser.add_argument('--metric', required=False,
                     help='name of the metric to post to.')
@@ -252,10 +252,13 @@ def send_stats(info):
     # contain multiple keys as the options parsed above are noe exclusive
     # The alarm name is passed as a dimension so the metric datapoint can
     # be associated with the alarm/watch in the engine
-    metric_dims = [{'AlarmName': args.watch}]
+    metadata = cfn_helper.Metadata('not-used', None)
+    metric_dims = metadata.get_tags()
+    if args.watch:
+        metric_dims['AlarmName'] = args.watch
     for key in info:
-        LOG.info("Sending watch %s metric %s, Units %s, Value %s" %
-                 (args.watch, key, info[key]['Units'], info[key]['Value']))
+        LOG.info("Sending metric %s, Units %s, Value %s" %
+                 (key, info[key]['Units'], info[key]['Value']))
         client.put_metric_data(namespace=namespace,
                                name=key,
                                value=info[key]['Value'],
