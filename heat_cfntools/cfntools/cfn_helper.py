@@ -1059,6 +1059,36 @@ class Metadata(object):
             'DescribeStackResourceResult']['StackResourceDetail']
         return resource_detail['Metadata']
 
+    def get_nova_meta(self,
+                      cache_path='/var/lib/heat-cfntools/nova_meta.json'):
+        """Get nova's meta_data.json and cache it.
+
+        Since this is called repeatedly return the cached metadata,
+        if we have it.
+        """
+
+        url = 'http://169.254.169.254/openstack/2012-08-10/meta_data.json'
+        if not os.path.exists(cache_path):
+            CommandRunner('wget -O %s %s' % (cache_path, url)).run()
+        try:
+            with open(cache_path) as fd:
+                try:
+                    return json.load(fd)
+                except ValueError:
+                    pass
+        except IOError:
+            pass
+        return None
+
+    def get_tags(self):
+        """Get the tags for this server."""
+        tags = {}
+        md = self.get_nova_meta()
+        if md is not None:
+            tags.update(md.get('meta', {}))
+            tags['InstanceId'] = md['uuid']
+        return tags
+
     def retrieve(
             self,
             meta_str=None,

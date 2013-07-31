@@ -672,6 +672,153 @@ class TestMetadataRetrieve(testtools.TestCase):
             md.cfn_init()
             self.assertThat(foo_file.name, ttm.FileContains('bar'))
 
+    def test_nova_meta_with_cache(self):
+        meta_in = {"uuid": "f9431d18-d971-434d-9044-5b38f5b4646f",
+                   "availability_zone": "nova",
+                   "hostname": "as-wikidatabase-4ykioj3lgi57.novalocal",
+                   "launch_index": 0,
+                   "meta": {},
+                   "public_keys": {"heat_key": "ssh-rsa etc...\n"},
+                   "name": "as-WikiDatabase-4ykioj3lgi57"}
+        md_str = json.dumps(meta_in)
+
+        md = cfn_helper.Metadata('teststack', None)
+        with tempfile.NamedTemporaryFile(mode='w+') as default_file:
+            default_file.write(md_str)
+            default_file.flush()
+            self.assertThat(default_file.name, ttm.FileContains(md_str))
+            meta_out = md.get_nova_meta(cache_path=default_file.name)
+
+            self.assertEqual(meta_in, meta_out)
+
+    def test_nova_meta_wget(self):
+        url = 'http://169.254.169.254/openstack/2012-08-10/meta_data.json'
+        temp_home = tempfile.mkdtemp()
+        cache_path = os.path.join(temp_home, 'meta_data.json')
+
+        def cleanup_temp_home(thome):
+            os.unlink(cache_path)
+            os.rmdir(thome)
+
+        self.m = mox.Mox()
+        self.addCleanup(self.m.UnsetStubs)
+        self.addCleanup(cleanup_temp_home, temp_home)
+
+        meta_in = {"uuid": "f9431d18-d971-434d-9044-5b38f5b4646f",
+                   "availability_zone": "nova",
+                   "hostname": "as-wikidatabase-4ykioj3lgi57.novalocal",
+                   "launch_index": 0,
+                   "meta": {"freddy": "is hungry"},
+                   "public_keys": {"heat_key": "ssh-rsa etc...\n"},
+                   "name": "as-WikiDatabase-4ykioj3lgi57"}
+        md_str = json.dumps(meta_in)
+
+        def write_cache_file(*params, **kwargs):
+            with open(cache_path, 'w+') as cache_file:
+                cache_file.write(md_str)
+                cache_file.flush()
+                self.assertThat(cache_file.name, ttm.FileContains(md_str))
+
+        self.m.StubOutWithMock(subprocess, 'Popen')
+        subprocess.Popen(['su', 'root', '-c',
+                          'wget -O %s %s' % (cache_path, url)],
+                         cwd=None, env=None, stderr=-1, stdout=-1)\
+                  .WithSideEffects(write_cache_file)\
+                  .AndReturn(FakePOpen('Downloaded', '', 0))
+
+        self.m.ReplayAll()
+
+        md = cfn_helper.Metadata('teststack', None)
+        meta_out = md.get_nova_meta(cache_path=cache_path)
+        self.assertEqual(meta_in, meta_out)
+        self.m.VerifyAll()
+
+    def test_nova_meta_wget_corrupt(self):
+        url = 'http://169.254.169.254/openstack/2012-08-10/meta_data.json'
+        temp_home = tempfile.mkdtemp()
+        cache_path = os.path.join(temp_home, 'meta_data.json')
+
+        def cleanup_temp_home(thome):
+            os.unlink(cache_path)
+            os.rmdir(thome)
+
+        self.m = mox.Mox()
+        self.addCleanup(self.m.UnsetStubs)
+        self.addCleanup(cleanup_temp_home, temp_home)
+
+        md_str = "this { is not really json"
+
+        def write_cache_file(*params, **kwargs):
+            with open(cache_path, 'w+') as cache_file:
+                cache_file.write(md_str)
+                cache_file.flush()
+                self.assertThat(cache_file.name, ttm.FileContains(md_str))
+
+        self.m.StubOutWithMock(subprocess, 'Popen')
+        subprocess.Popen(['su', 'root', '-c',
+                          'wget -O %s %s' % (cache_path, url)],
+                         cwd=None, env=None, stderr=-1, stdout=-1)\
+                  .WithSideEffects(write_cache_file)\
+                  .AndReturn(FakePOpen('Downloaded', '', 0))
+
+        self.m.ReplayAll()
+
+        md = cfn_helper.Metadata('teststack', None)
+        meta_out = md.get_nova_meta(cache_path=cache_path)
+        self.assertEqual(None, meta_out)
+        self.m.VerifyAll()
+
+    def test_nova_meta_wget_failed(self):
+        url = 'http://169.254.169.254/openstack/2012-08-10/meta_data.json'
+        temp_home = tempfile.mkdtemp()
+        cache_path = os.path.join(temp_home, 'meta_data.json')
+
+        def cleanup_temp_home(thome):
+            os.rmdir(thome)
+
+        self.m = mox.Mox()
+        self.addCleanup(self.m.UnsetStubs)
+        self.addCleanup(cleanup_temp_home, temp_home)
+
+        self.m.StubOutWithMock(subprocess, 'Popen')
+        subprocess.Popen(['su', 'root', '-c',
+                          'wget -O %s %s' % (cache_path, url)],
+                         cwd=None, env=None, stderr=-1, stdout=-1)\
+                  .AndReturn(FakePOpen('Failed', '', 1))
+
+        self.m.ReplayAll()
+
+        md = cfn_helper.Metadata('teststack', None)
+        meta_out = md.get_nova_meta(cache_path=cache_path)
+        self.assertEqual(None, meta_out)
+        self.m.VerifyAll()
+
+    def test_get_tags(self):
+        self.m = mox.Mox()
+        self.addCleanup(self.m.UnsetStubs)
+
+        fake_tags = {'foo': 'fee',
+                     'apple': 'red'}
+        md_data = {"uuid": "f9431d18-d971-434d-9044-5b38f5b4646f",
+                   "availability_zone": "nova",
+                   "hostname": "as-wikidatabase-4ykioj3lgi57.novalocal",
+                   "launch_index": 0,
+                   "meta": fake_tags,
+                   "public_keys": {"heat_key": "ssh-rsa etc...\n"},
+                   "name": "as-WikiDatabase-4ykioj3lgi57"}
+        tags_expect = fake_tags
+        tags_expect['InstanceId'] = md_data['uuid']
+
+        md = cfn_helper.Metadata('teststack', None)
+
+        self.m.StubOutWithMock(md, 'get_nova_meta')
+        md.get_nova_meta().AndReturn(md_data)
+        self.m.ReplayAll()
+
+        tags = md.get_tags()
+        self.assertEqual(tags_expect, tags)
+        self.m.VerifyAll()
+
 
 class TestSourcesHandler(MockPopenTestCase):
     def test_apply_sources_empty(self):
