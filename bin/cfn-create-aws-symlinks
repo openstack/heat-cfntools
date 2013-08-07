@@ -29,15 +29,15 @@ def create_symlink(source_file, target_file, override=False):
             print('%s already exists, will not replace with symlink'
                   % target_file)
             return
-    print '%s -> %s' % (source_file, target_file)
+    print('%s -> %s' % (source_file, target_file))
     os.symlink(source_file, target_file)
 
 
 def check_dirs(source_dir, target_dir):
-    print '%s -> %s' % (source_dir, target_dir)
+    print('%s -> %s' % (source_dir, target_dir))
 
     if source_dir == target_dir:
-        print 'Source and target are the same %s' % target_dir
+        print('Source and target are the same %s' % target_dir)
         return False
 
     if not os.path.exists(target_dir):

@@ -1181,7 +1181,7 @@ class Metadata(object):
 
     def display(self):
         if self._metadata is not None:
-            print str(self)
+            print(str(self))
         return
 
     def _is_valid_metadata(self):

@@ -58,11 +58,11 @@ parser.add_argument('-k', '--key',
 args = parser.parse_args()
 
 if not args.stack_name:
-    print 'The Stack name must not be empty.'
+    print('The Stack name must not be empty.')
     exit(1)
 
 if not args.logical_resource_id:
-    print 'The Resource ID must not be empty'
+    print('The Resource ID must not be empty')
     exit(1)
 
 log_format = '%(levelname)s [%(asctime)s] %(message)s'
