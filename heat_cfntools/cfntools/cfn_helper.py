@@ -872,9 +872,11 @@ class CommandsHandler(object):
 
         if "command" in properties:
             try:
-                # TODO(pfreund) aws doc : "Either an array or a string
-                # specifying the command to run" Need the array.
-                command = CommandRunner(properties["command"])
+                command = properties["command"]
+                if isinstance(command, list):
+                    escape = lambda x: '"%s"' % x.replace('"', '\\"')
+                    command = ' '.join(map(escape, command))
+                command = CommandRunner(command)
                 command.run('root', cwd, env)
                 command_status = command.status
             except OSError as e:
