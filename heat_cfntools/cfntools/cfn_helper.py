@@ -853,21 +853,22 @@ class CommandsHandler(object):
         cwd = None
         env = properties.get("env", None)
 
-        if "test" in properties:
-            test_status = CommandRunner(properties["test"]).run().status
-            if test_status != 0:
-                LOG.info("%s test returns false, skipping command"
-                         % command_label)
-                return
-            else:
-                LOG.debug("%s test returns true, proceeding" % command_label)
-
         if "cwd" in properties:
             cwd = os.path.expanduser(properties["cwd"])
             if not os.path.exists(cwd):
                 LOG.error("%s has failed. " % command_label +
                           "%s path does not exist" % cwd)
                 return
+
+        if "test" in properties:
+            test = CommandRunner(properties["test"])
+            test_status = test.run('root', cwd, env).status
+            if test_status != 0:
+                LOG.info("%s test returns false, skipping command"
+                         % command_label)
+                return
+            else:
+                LOG.debug("%s test returns true, proceeding" % command_label)
 
         if "command" in properties:
             try:
