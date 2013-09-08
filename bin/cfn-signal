@@ -45,9 +45,14 @@ parser.add_argument('-i', '--id',
                     help="the unique id to send back to the WaitCondition",
                     default='00000',
                     required=False)
-parser.add_argument('-e', '--exit',
+parser.add_argument('-e', '--exit-code',
                     dest="exit_code",
                     help="The exit code from a procecc to interpret",
+                    default=None,
+                    required=False)
+parser.add_argument('--exit',
+                    dest="exit",
+                    help="DEPRECATED! Use -e or --exit-code instead.",
                     default=None,
                     required=False)
 parser.add_argument('url',
@@ -64,11 +69,13 @@ file_handler.setFormatter(logging.Formatter(log_format))
 LOG.addHandler(file_handler)
 
 LOG.debug('cfn-signal called %s ' % (str(args)))
-
+if args.exit:
+    LOG.warning('--exit DEPRECATED! Use -e or --exit-code instead.')
 status = 'FAILURE'
-if args.exit_code:
+exit_code = args.exit_code or args.exit
+if exit_code:
     # "exit_code" takes presedence over "success".
-    if args.exit_code == '0':
+    if exit_code == '0':
         status = 'SUCCESS'
 else:
     if args.success == 'true':
