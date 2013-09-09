@@ -1182,9 +1182,47 @@ class Metadata(object):
     def __str__(self):
         return json.dumps(self._metadata)
 
-    def display(self):
-        if self._metadata is not None:
+    def display(self, key=None):
+        """Print the metadata to the standard output stream. By default the
+        full metadata is displayed but the ouptut can be limited to a specific
+        with the <key> argument.
+
+        Arguments:
+            key -- the metadata's key to display, nested keys can be specified
+                   separating them by the dot character.
+                        e.g., "foo.bar"
+                   If the key contains a dot, it should be surrounded by single
+                   quotes
+                        e.g., "foo.'bar.1'"
+        """
+        if self._metadata is None:
+            return
+
+        if key is None:
             print(str(self))
+            return
+
+        value = None
+        md = self._metadata
+        while True:
+            key_match = re.match(r'^(?:(?:\'([^\']+)\')|([^\.]+))(?:\.|$)',
+                                 key)
+            if not key_match:
+                break
+
+            k = key_match.group(1) or key_match.group(2)
+            if isinstance(md, dict) and k in md:
+                key = key.replace(key_match.group(), '')
+                value = md = md[k]
+            else:
+                break
+
+        if key != '':
+            value = None
+
+        if value is not None:
+            print(json.dumps(value))
+
         return
 
     def _is_valid_metadata(self):

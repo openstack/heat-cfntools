@@ -563,11 +563,6 @@ class TestMetadataRetrieve(testtools.TestCase):
         md_str = json.dumps(md_data)
 
         md = cfn_helper.Metadata('teststack', None)
-        self.assertTrue(md.retrieve(meta_str=md_str,
-                                    last_path=self.last_file))
-        self.assertThat(md_data, ttm.Equals(md._metadata))
-
-        md = cfn_helper.Metadata('teststack', None)
         self.assertTrue(md.retrieve(meta_str=md_data,
                                     last_path=self.last_file))
         self.assertThat(md_data, ttm.Equals(md._metadata))
@@ -582,6 +577,99 @@ class TestMetadataRetrieve(testtools.TestCase):
                          "{\"AWS::CloudFormation::Init\": {\"config\": {"
                          "\"files\": {\"/tmp/foo\": {\"content\": \"bar\"}"
                          "}}}}\n")
+
+    def test_metadata_retrieve_by_key_passed(self):
+
+        md_data = {"foo": {"bar": {"fred.1": "abcd"}}}
+        md_str = json.dumps(md_data)
+
+        md = cfn_helper.Metadata('teststack', None)
+        self.assertTrue(md.retrieve(meta_str=md_data,
+                                    last_path=self.last_file))
+        self.assertThat(md_data, ttm.Equals(md._metadata))
+        self.assertEqual(md_str, str(md))
+
+        displayed = self.useFixture(fixtures.StringStream('stdout'))
+        fake_stdout = displayed.stream
+        self.useFixture(fixtures.MonkeyPatch('sys.stdout', fake_stdout))
+        md.display("foo")
+        fake_stdout.flush()
+        self.assertEqual(displayed.getDetails()['stdout'].as_text(),
+                         "{\"bar\": {\"fred.1\": \"abcd\"}}\n")
+
+    def test_metadata_retrieve_by_nested_key_passed(self):
+
+        md_data = {"foo": {"bar": {"fred.1": "abcd"}}}
+        md_str = json.dumps(md_data)
+
+        md = cfn_helper.Metadata('teststack', None)
+        self.assertTrue(md.retrieve(meta_str=md_data,
+                                    last_path=self.last_file))
+        self.assertThat(md_data, ttm.Equals(md._metadata))
+        self.assertEqual(md_str, str(md))
+
+        displayed = self.useFixture(fixtures.StringStream('stdout'))
+        fake_stdout = displayed.stream
+        self.useFixture(fixtures.MonkeyPatch('sys.stdout', fake_stdout))
+        md.display("foo.bar.'fred.1'")
+        fake_stdout.flush()
+        self.assertEqual(displayed.getDetails()['stdout'].as_text(),
+                         '"abcd"\n')
+
+    def test_metadata_retrieve_key_none(self):
+
+        md_data = {"AWS::CloudFormation::Init": {"config": {"files": {
+            "/tmp/foo": {"content": "bar"}}}}}
+        md_str = json.dumps(md_data)
+
+        md = cfn_helper.Metadata('teststack', None)
+        self.assertTrue(md.retrieve(meta_str=md_data,
+                                    last_path=self.last_file))
+        self.assertThat(md_data, ttm.Equals(md._metadata))
+        self.assertEqual(md_str, str(md))
+
+        displayed = self.useFixture(fixtures.StringStream('stdout'))
+        fake_stdout = displayed.stream
+        self.useFixture(fixtures.MonkeyPatch('sys.stdout', fake_stdout))
+        md.display("no_key")
+        fake_stdout.flush()
+        self.assertEqual(displayed.getDetails()['stdout'].as_text(), "")
+
+    def test_metadata_retrieve_by_nested_key_none(self):
+
+        md_data = {"foo": {"bar": {"fred.1": "abcd"}}}
+        md_str = json.dumps(md_data)
+
+        md = cfn_helper.Metadata('teststack', None)
+        self.assertTrue(md.retrieve(meta_str=md_data,
+                                    last_path=self.last_file))
+        self.assertThat(md_data, ttm.Equals(md._metadata))
+        self.assertEqual(md_str, str(md))
+
+        displayed = self.useFixture(fixtures.StringStream('stdout'))
+        fake_stdout = displayed.stream
+        self.useFixture(fixtures.MonkeyPatch('sys.stdout', fake_stdout))
+        md.display("foo.fred")
+        fake_stdout.flush()
+        self.assertEqual(displayed.getDetails()['stdout'].as_text(), "")
+
+    def test_metadata_retrieve_by_nested_key_none_with_matching_string(self):
+
+        md_data = {"foo": "bar"}
+        md_str = json.dumps(md_data)
+
+        md = cfn_helper.Metadata('teststack', None)
+        self.assertTrue(md.retrieve(meta_str=md_data,
+                                    last_path=self.last_file))
+        self.assertThat(md_data, ttm.Equals(md._metadata))
+        self.assertEqual(md_str, str(md))
+
+        displayed = self.useFixture(fixtures.StringStream('stdout'))
+        fake_stdout = displayed.stream
+        self.useFixture(fixtures.MonkeyPatch('sys.stdout', fake_stdout))
+        md.display("foo.bar")
+        fake_stdout.flush()
+        self.assertEqual(displayed.getDetails()['stdout'].as_text(), "")
 
     def test_metadata_creates_cache(self):
         temp_home = tempfile.mkdtemp()
