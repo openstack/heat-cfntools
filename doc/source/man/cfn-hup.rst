@@ -22,7 +22,7 @@ OPTIONS
 
 .. cmdoption:: -f, --no-daemon
 
-  Do not run as a deamon
+  Do not run as a daemon
 
 .. cmdoption:: -v, --verbose
 
