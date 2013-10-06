@@ -213,11 +213,6 @@ class RpmHelper(object):
         _rpm_util = rpmupdates.Updates([], [])
 
     @classmethod
-    def prepcache(cls):
-        """Prepare the yum cache."""
-        CommandRunner("yum -y makecache").run()
-
-    @classmethod
     def compare_rpm_versions(cls, v1, v2):
         """Compare two RPM version strings.
 
@@ -290,7 +285,7 @@ class RpmHelper(object):
                    e.g., httpd-2.2.22
                    e.g., httpd-2.2.22-1.fc16
         """
-        cmd_str = "yum -C -y --showduplicates list available %s" % pkg
+        cmd_str = "yum -y --showduplicates list available %s" % pkg
         command = CommandRunner(cmd_str).run()
         return command.status == 0
 
@@ -417,8 +412,6 @@ class PackagesHandler(object):
         # collect pkgs for batch processing at end
         installs = []
         downgrades = []
-        # update yum cache
-        RpmHelper.prepcache()
         for pkg_name, versions in packages.iteritems():
             ver = RpmHelper.newest_rpm_version(versions)
             pkg = "%s-%s" % (pkg_name, ver) if ver else pkg_name
