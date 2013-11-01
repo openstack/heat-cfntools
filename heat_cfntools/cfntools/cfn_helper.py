@@ -429,10 +429,10 @@ class PackagesHandler(object):
                     installs.append(pkg)
                 elif rc > 0:
                     downgrades.append(pkg)
-            if installs:
-                RpmHelper.install(installs, rpms=False)
-            if downgrades:
-                RpmHelper.downgrade(downgrades)
+        if installs:
+            RpmHelper.install(installs, rpms=False)
+        if downgrades:
+            RpmHelper.downgrade(downgrades)
 
     def _handle_rpm_packages(self, packages):
         """Handle installation, upgrade, or downgrade of packages via rpm.

@@ -87,10 +87,11 @@ class TestPackages(MockPopenTestCase):
                  'yum -y --showduplicates list available %s' % pack]) \
                 .AndReturn(FakePOpen(returncode=0))
             install_list.append(pack)
-            self.mock_cmd_run(
-                ['su', 'root', '-c',
-                 'yum -y install %s' % ' '.join(install_list)]) \
-                .AndReturn(FakePOpen(returncode=0))
+
+        self.mock_cmd_run(
+            ['su', 'root', '-c',
+             'yum -y install %s' % ' '.join(install_list)]) \
+            .AndReturn(FakePOpen(returncode=0))
 
         self.m.ReplayAll()
         packages = {
