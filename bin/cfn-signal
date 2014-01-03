@@ -43,7 +43,7 @@ parser.add_argument('-d', '--data',
 parser.add_argument('-i', '--id',
                     dest="unique_id",
                     help="the unique id to send back to the WaitCondition",
-                    default='00000',
+                    default=None,
                     required=False)
 parser.add_argument('-e', '--exit-code',
                     dest="exit_code",
@@ -80,10 +80,21 @@ else:
     if args.success == 'true':
         status = 'SUCCESS'
 
+unique_id = args.unique_id
+if unique_id is None:
+    LOG.debug('No id passed from the command line')
+    md = cfn_helper.Metadata('not-used', None)
+    unique_id = md.get_instance_id()
+    if unique_id is None:
+        LOG.error('Could not get the instance id from metadata!')
+        import socket
+        unique_id = socket.getfqdn()
+LOG.debug('id: %s' % (unique_id))
+
 body = {
     "Status": status,
     "Reason": args.reason,
-    "UniqueId": args.unique_id,
+    "UniqueId": unique_id,
     "Data": args.data
 }
 

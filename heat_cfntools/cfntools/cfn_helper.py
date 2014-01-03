@@ -1078,6 +1078,14 @@ class Metadata(object):
             pass
         return None
 
+    def get_instance_id(self):
+        """Get the unique identifier for this server."""
+        instance_id = None
+        md = self.get_nova_meta()
+        if md is not None:
+            instance_id = md.get('uuid')
+        return instance_id
+
     def get_tags(self):
         """Get the tags for this server."""
         tags = {}

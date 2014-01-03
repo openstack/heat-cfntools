@@ -959,6 +959,27 @@ class TestMetadataRetrieve(testtools.TestCase):
         self.assertEqual(tags_expect, tags)
         self.m.VerifyAll()
 
+    def test_get_instance_id(self):
+        self.m = mox.Mox()
+        self.addCleanup(self.m.UnsetStubs)
+
+        uuid = "f9431d18-d971-434d-9044-5b38f5b4646f"
+        md_data = {"uuid": uuid,
+                   "availability_zone": "nova",
+                   "hostname": "as-wikidatabase-4ykioj3lgi57.novalocal",
+                   "launch_index": 0,
+                   "public_keys": {"heat_key": "ssh-rsa etc...\n"},
+                   "name": "as-WikiDatabase-4ykioj3lgi57"}
+
+        md = cfn_helper.Metadata('teststack', None)
+
+        self.m.StubOutWithMock(md, 'get_nova_meta')
+        md.get_nova_meta().AndReturn(md_data)
+        self.m.ReplayAll()
+
+        self.assertEqual(md.get_instance_id(), uuid)
+        self.m.VerifyAll()
+
 
 class TestSourcesHandler(MockPopenTestCase):
     def test_apply_sources_empty(self):
