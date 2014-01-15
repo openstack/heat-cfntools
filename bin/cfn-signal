@@ -60,13 +60,12 @@ parser.add_argument('url',
 args = parser.parse_args()
 
 log_format = '%(levelname)s [%(asctime)s] %(message)s'
-logging.basicConfig(format=log_format, level=logging.DEBUG)
+log_file_name = "/var/log/cfn-signal.log"
+logging.basicConfig(filename=log_file_name,
+                    format=log_format,
+                    level=logging.DEBUG)
 
 LOG = logging.getLogger('cfntools')
-log_file_name = "/var/log/cfn-signal.log"
-file_handler = logging.FileHandler(log_file_name)
-file_handler.setFormatter(logging.Formatter(log_format))
-LOG.addHandler(file_handler)
 
 LOG.debug('cfn-signal called %s ' % (str(args)))
 if args.exit:

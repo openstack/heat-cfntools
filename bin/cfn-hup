@@ -45,17 +45,12 @@ args = parser.parse_args()
 # Setup logging
 log_format = '%(levelname)s [%(asctime)s] %(message)s'
 log_file_name = "/var/log/cfn-hup.log"
+log_level = logging.INFO
+if args.verbose:
+    log_level = logging.DEBUG
 logging.basicConfig(filename=log_file_name,
                     format=log_format,
-                    level=logging.DEBUG)
-if args.verbose:
-    logging.basicConfig(filename=log_file_name,
-                        format=log_format,
-                        level=logging.DEBUG)
-else:
-    logging.basicConfig(filename=log_file_name,
-                        format=log_format,
-                        level=logging.INFO)
+                    level=log_level)
 
 LOG = logging.getLogger('cfntools')
 
