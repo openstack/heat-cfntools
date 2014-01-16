@@ -800,18 +800,6 @@ class TestMetadataRetrieve(testtools.TestCase):
         finally:
             m.UnsetStubs()
 
-    def test_cfn_init(self):
-
-        with tempfile.NamedTemporaryFile(mode='w+') as foo_file:
-            md_data = {"AWS::CloudFormation::Init": {"config": {"files": {
-                foo_file.name: {"content": "bar"}}}}}
-
-            md = cfn_helper.Metadata('teststack', None)
-            self.assertTrue(
-                md.retrieve(meta_str=md_data, last_path=self.last_file))
-            md.cfn_init()
-            self.assertThat(foo_file.name, ttm.FileContains('bar'))
-
     def test_nova_meta_with_cache(self):
         meta_in = {"uuid": "f9431d18-d971-434d-9044-5b38f5b4646f",
                    "availability_zone": "nova",
@@ -958,6 +946,59 @@ class TestMetadataRetrieve(testtools.TestCase):
         tags = md.get_tags()
         self.assertEqual(tags_expect, tags)
         self.m.VerifyAll()
+
+
+class TestCfnInit(MockPopenTestCase):
+
+    def setUp(self):
+        super(TestCfnInit, self).setUp()
+        self.tdir = self.useFixture(fixtures.TempDir())
+        self.last_file = os.path.join(self.tdir.path, 'last_metadata')
+
+    def test_cfn_init(self):
+
+        with tempfile.NamedTemporaryFile(mode='w+') as foo_file:
+            md_data = {"AWS::CloudFormation::Init": {"config": {"files": {
+                foo_file.name: {"content": "bar"}}}}}
+
+            md = cfn_helper.Metadata('teststack', None)
+            self.assertTrue(
+                md.retrieve(meta_str=md_data, last_path=self.last_file))
+            md.cfn_init()
+            self.assertThat(foo_file.name, ttm.FileContains('bar'))
+
+    def test_cfn_init_with_ignore_errors_false(self):
+        self.mock_cmd_run(['su', 'root', '-c', '/bin/command1']).AndReturn(
+            FakePOpen('Doing something', 'error', -1))
+        self.m.ReplayAll()
+
+        md_data = {"AWS::CloudFormation::Init": {"config": {"commands": {
+            "00_foo": {"command": "/bin/command1",
+                       "ignoreErrors": "false"}}}}}
+
+        md = cfn_helper.Metadata('teststack', None)
+        self.assertTrue(
+            md.retrieve(meta_str=md_data, last_path=self.last_file))
+        self.assertRaises(cfn_helper.CommandsHandlerRunError, md.cfn_init)
+
+    def test_cfn_init_with_ignore_errors_true(self):
+        self.mock_cmd_run(['su', 'root', '-c', '/bin/command1']).AndReturn(
+            FakePOpen('Doing something', 'error', -1))
+        self.mock_cmd_run(['su', 'root', '-c', '/bin/command2']).AndReturn(
+            FakePOpen('All good'))
+        self.m.ReplayAll()
+
+        md_data = {"AWS::CloudFormation::Init": {"config": {"commands": {
+            "00_foo": {"command": "/bin/command1",
+                       "ignoreErrors": "true"},
+            "01_bar": {"command": "/bin/command2",
+                       "ignoreErrors": "false"}
+        }}}}
+
+        md = cfn_helper.Metadata('teststack', None)
+        self.assertTrue(
+            md.retrieve(meta_str=md_data, last_path=self.last_file))
+        md.cfn_init()
 
 
 class TestSourcesHandler(MockPopenTestCase):
