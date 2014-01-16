@@ -497,7 +497,7 @@ class TestCfnHelper(testtools.TestCase):
             metadata_info.write(content)
             metadata_info.flush()
             port = cfn_helper.metadata_server_port(metadata_info.name)
-            self.assertEquals(value, port)
+            self.assertEqual(value, port)
 
     def test_metadata_server_port(self):
         self._check_metadata_content("http://172.20.42.42:8000\n", 8000)
@@ -521,8 +521,8 @@ class TestCfnHelper(testtools.TestCase):
 
     def test_metadata_server_nofile(self):
         random_filename = self.getUniqueString()
-        self.assertEquals(None,
-                          cfn_helper.metadata_server_port(random_filename))
+        self.assertEqual(None,
+                         cfn_helper.metadata_server_port(random_filename))
 
     def test_to_boolean(self):
         self.assertTrue(cfn_helper.to_boolean(True))
