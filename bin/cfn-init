@@ -50,13 +50,12 @@ parser.add_argument('-c', '--configsets',
 args = parser.parse_args()
 
 log_format = '%(levelname)s [%(asctime)s] %(message)s'
-logging.basicConfig(format=log_format, level=logging.DEBUG)
+log_file_name = "/var/log/cfn-init.log"
+logging.basicConfig(filename=log_file_name,
+                    format=log_format,
+                    level=logging.DEBUG)
 
 LOG = logging.getLogger('cfntools')
-log_file_name = "/var/log/cfn-init.log"
-file_handler = logging.FileHandler(log_file_name)
-file_handler.setFormatter(logging.Formatter(log_format))
-LOG.addHandler(file_handler)
 
 metadata = cfn_helper.Metadata(args.stack_name,
                                args.logical_resource_id,
