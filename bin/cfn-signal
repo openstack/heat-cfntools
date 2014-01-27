@@ -90,4 +90,6 @@ body = {
 cmd_str = "curl -X PUT -H \'Content-Type:\' --data-binary \'%s\' \"%s\"" % \
     (cfn_helper.json.dumps(body), args.url)
 command = cfn_helper.CommandRunner(cmd_str).run()
+if command.status != 0:
+    LOG.error(command.stderr)
 sys.exit(command.status)
