@@ -188,8 +188,10 @@ class CommandRunner(object):
         self._stdout = output[0]
         self._stderr = output[1]
         if self._status:
-            LOG.debug("Return code of %d after executing: '%s'" % (
-                self._status, cmd))
+            LOG.debug("Return code of %d after executing: '%s'\n"
+                      "stdout: '%s'\n"
+                      "stderr: '%s'" % (self._status, cmd, self._stdout,
+                                        self._stderr))
         if self._next:
             self._next.run()
         return self
