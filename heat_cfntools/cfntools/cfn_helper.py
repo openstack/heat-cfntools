@@ -829,6 +829,10 @@ def metadata_server_port(
         return None
 
 
+class CommandsHandlerRunError(Exception):
+    pass
+
+
 class CommandsHandler(object):
 
     def __init__(self, commands):
@@ -887,14 +891,12 @@ class CommandsHandler(object):
         if command_status == 0:
             LOG.info("%s has been successfully executed" % command_label)
         else:
-            if "ignoreErrors" in properties:
-                if properties["ignoreErrors"] == "false":
-                    LOG.error("%s has failed. Not ignoring" % command_label)
-                else:
-                    LOG.info("%s has failed. Explicit ignoring"
-                             % command_label)
+            if "ignoreErrors" in properties and \
+               to_boolean(properties["ignoreErrors"]):
+                LOG.info("%s has failed (status=%d). Explicit ignoring"
+                         % (command_label, command_status))
             else:
-                LOG.error("%s has failed." % command_label)
+                raise CommandsHandlerRunError("%s has failed." % command_label)
 
 
 class GroupsHandler(object):
