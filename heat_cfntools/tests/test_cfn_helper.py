@@ -17,7 +17,7 @@
 import boto.cloudformation as cfn
 import fixtures
 import json
-import mox
+from mox3 import mox
 import os
 import subprocess
 import tempfile

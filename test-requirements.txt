@@ -1,7 +1,7 @@
 # Hacking already pins down pep8, pyflakes and flake8
 hacking>=0.8.0,<0.9
 
-mox>=0.5.3
+mox3>=0.7.0
 discover
 testrepository>=0.0.17
 testtools>=0.9.32
