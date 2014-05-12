@@ -643,37 +643,47 @@ class ServicesHandler(object):
         self.hooks = hooks
 
     def _handle_sysv_command(self, service, command):
-        service_exe = "/sbin/service"
-        enable_exe = "/sbin/chkconfig"
-        cmd = ""
-        if "enable" == command:
-            cmd = "%s %s on" % (enable_exe, service)
-        elif "disable" == command:
-            cmd = "%s %s off" % (enable_exe, service)
-        elif "start" == command:
-            cmd = "%s %s start" % (service_exe, service)
-        elif "stop" == command:
-            cmd = "%s %s stop" % (service_exe, service)
-        elif "status" == command:
-            cmd = "%s %s status" % (service_exe, service)
-        command = CommandRunner(cmd)
-        command.run()
-        return command
+        if os.path.exists("/bin/systemctl"):
+            service_exe = "/bin/systemctl"
+            service = '%s.service' % service
+            service_start = '%s start %s'
+            service_status = '%s status %s'
+            service_stop = '%s stop %s'
+        elif os.path.exists("/sbin/service"):
+            service_exe = "/sbin/service"
+            service_start = '%s %s start'
+            service_status = '%s %s status'
+            service_stop = '%s %s stop'
+        else:
+            service_exe = "/usr/sbin/service"
+            service_start = '%s %s start'
+            service_status = '%s %s status'
+            service_stop = '%s %s stop'
 
-    def _handle_systemd_command(self, service, command):
-        exe = "/bin/systemctl"
+        if os.path.exists("/bin/systemctl"):
+            enable_exe = "/bin/systemctl"
+            enable_on = '%s enable %s'
+            enable_off = '%s disable %s'
+        elif os.path.exists("/sbin/chkconfig"):
+            enable_exe = "/sbin/chkconfig"
+            enable_on = '%s %s on'
+            enable_off = '%s %s off'
+        else:
+            enable_exe = "/usr/sbin/update-rc.d"
+            enable_on = '%s %s enable'
+            enable_off = '%s %s disable'
+
         cmd = ""
-        service = '%s.service' % service
         if "enable" == command:
-            cmd = "%s enable %s" % (exe, service)
+            cmd = enable_on % (enable_exe, service)
         elif "disable" == command:
-            cmd = "%s disable %s" % (exe, service)
+            cmd = enable_off % (enable_exe, service)
         elif "start" == command:
-            cmd = "%s start %s" % (exe, service)
+            cmd = service_start % (service_exe, service)
         elif "stop" == command:
-            cmd = "%s stop %s" % (exe, service)
+            cmd = service_stop % (service_exe, service)
         elif "status" == command:
-            cmd = "%s status %s" % (exe, service)
+            cmd = service_status % (service_exe, service)
         command = CommandRunner(cmd)
         command.run()
         return command
@@ -725,7 +735,7 @@ class ServicesHandler(object):
     # map of function pointers to various service handlers
     _service_handlers = {
         "sysvinit": _handle_sysv_command,
-        "systemd": _handle_systemd_command
+        "systemd": _handle_sysv_command
     }
 
     def _service_handler(self, manager_name):
