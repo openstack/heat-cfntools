@@ -22,7 +22,6 @@ import atexit
 import ConfigParser
 import errno
 import grp
-import hashlib
 import json
 import logging
 import os
@@ -1108,6 +1107,11 @@ class Metadata(object):
                True -- success
               False -- error
         """
+        if self.resource is not None:
+            res_last_path = last_path + '_' + self.resource
+        else:
+            res_last_path = last_path
+
         if meta_str:
             self._data = meta_str
         else:
@@ -1127,7 +1131,7 @@ class Metadata(object):
                 # cached metadata or the logic below could re-run a stale
                 # cfn-init-data
                 fd = None
-                for filepath in [last_path, default_path]:
+                for filepath in [res_last_path, last_path, default_path]:
                     try:
                         fd = open(filepath)
                     except IOError:
@@ -1150,18 +1154,21 @@ class Metadata(object):
         else:
             self._metadata = self._data
 
-        cm = hashlib.md5(json.dumps(self._metadata))
-        current_md5 = cm.hexdigest()
-        old_md5 = None
+        last_data = ""
+        for metadata_file in [res_last_path, last_path]:
+            try:
+                with open(metadata_file) as lm:
+                    try:
+                        last_data = json.load(lm)
+                    except ValueError:
+                        pass
+                    lm.close()
+            except IOError:
+                LOG.warn("Unable to open local metadata : %s" %
+                         metadata_file)
+                continue
 
-        try:
-            with open(last_path) as lm:
-                om = hashlib.md5()
-                om.update(lm.read())
-                old_md5 = om.hexdigest()
-        except Exception:
-            pass
-        if old_md5 != current_md5:
+        if self._metadata != last_data:
             self._has_changed = True
 
         # if cache dir does not exist try to create it
@@ -1181,6 +1188,9 @@ class Metadata(object):
             os.chmod(cf.name, 0o600)
             cf.write(json.dumps(self._metadata))
             os.rename(cf.name, last_path)
+            cf.close()
+            if res_last_path != last_path:
+                shutil.copy(last_path, res_last_path)
 
         return True
 
