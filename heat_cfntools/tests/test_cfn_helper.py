@@ -76,7 +76,7 @@ class TestCommandRunner(MockPopenTestCase):
 
 class TestPackages(MockPopenTestCase):
 
-    def test_rpm_install(self):
+    def test_yum_install(self):
         install_list = []
         for pack in ('httpd', 'wordpress', 'mysql-server'):
             self.mock_cmd_run(['su', 'root', '-c',
@@ -96,6 +96,35 @@ class TestPackages(MockPopenTestCase):
         self.m.ReplayAll()
         packages = {
             "yum": {
+                "mysql-server": [],
+                "httpd": [],
+                "wordpress": []
+            }
+        }
+
+        cfn_helper.PackagesHandler(packages).apply_packages()
+        self.m.VerifyAll()
+
+    def test_zypper_install(self):
+        install_list = []
+        for pack in ('httpd', 'wordpress', 'mysql-server'):
+            self.mock_cmd_run(['su', 'root', '-c',
+                               'rpm -q %s' % pack]).AndReturn(
+                                   FakePOpen(returncode=1))
+            self.mock_cmd_run(
+                ['su', 'root', '-c',
+                 'zypper -n --no-refresh search %s' % pack]) \
+                .AndReturn(FakePOpen(returncode=0))
+            install_list.append(pack)
+
+        self.mock_cmd_run(
+            ['su', 'root', '-c',
+             'zypper -n install %s' % ' '.join(install_list)]) \
+            .AndReturn(FakePOpen(returncode=0))
+
+        self.m.ReplayAll()
+        packages = {
+            "zypper": {
                 "mysql-server": [],
                 "httpd": [],
                 "wordpress": []

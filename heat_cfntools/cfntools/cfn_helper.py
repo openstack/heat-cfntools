@@ -291,7 +291,21 @@ class RpmHelper(object):
         return command.status == 0
 
     @classmethod
-    def install(cls, packages, rpms=True):
+    def zypper_package_available(cls, pkg):
+        """Indicates whether pkg is available via zypper.
+
+        Arguments:
+            pkg -- A package name (with optional version and release spec).
+                   e.g., httpd
+                   e.g., httpd-2.2.22
+                   e.g., httpd-2.2.22-1.fc16
+        """
+        cmd_str = "zypper -n --no-refresh search %s" % pkg
+        command = CommandRunner(cmd_str).run()
+        return command.status == 0
+
+    @classmethod
+    def install(cls, packages, rpms=True, zypper=False):
         """Installs (or upgrades) a set of packages via RPM or via Yum.
 
         Arguments:
@@ -311,6 +325,10 @@ class RpmHelper(object):
             cmd = "rpm -U --force --nosignature "
             cmd += " ".join(packages)
             LOG.info("Installing packages: %s" % cmd)
+        elif zypper:
+            cmd = "zypper -n install "
+            cmd += " ".join(packages)
+            LOG.info("Installing packages: %s" % cmd)
         else:
             cmd = "yum -y install "
             cmd += " ".join(packages)
@@ -320,7 +338,7 @@ class RpmHelper(object):
             LOG.warn("Failed to install packages: %s" % cmd)
 
     @classmethod
-    def downgrade(cls, packages, rpms=True):
+    def downgrade(cls, packages, rpms=True, zypper=False):
         """Downgrades a set of packages via RPM or via Yum.
 
         Arguments:
@@ -337,6 +355,13 @@ class RpmHelper(object):
         """
         if rpms:
             cls.install(packages)
+        elif zypper:
+            cmd = "zypper -n install --oldpackage "
+            cmd += " ".join(packages)
+            LOG.info("Downgrading packages: %s", cmd)
+            command = CommandRunner(cmd).run()
+            if command.status:
+                LOG.warn("Failed to downgrade packages: %s" % cmd)
         else:
             cmd = "yum -y downgrade "
             cmd += " ".join(packages)
@@ -389,6 +414,51 @@ class PackagesHandler(object):
         for pkg_name, versions in packages.iteritems():
             cmd_str = 'easy_install %s' % (pkg_name)
             CommandRunner(cmd_str).run()
+
+    def _handle_zypper_packages(self, packages):
+        """Handle installation, upgrade, or downgrade of packages via yum.
+
+        Arguments:
+        packages -- a package entries map of the form:
+                      "pkg_name" : "version",
+                      "pkg_name" : ["v1", "v2"],
+                      "pkg_name" : []
+
+        For each package entry:
+          * if no version is supplied and the package is already installed, do
+            nothing
+          * if no version is supplied and the package is _not_ already
+            installed, install it
+          * if a version string is supplied, and the package is already
+            installed, determine whether to downgrade or upgrade (or do nothing
+            if version matches installed package)
+          * if a version array is supplied, choose the highest version from the
+            array and follow same logic for version string above
+        """
+        # collect pkgs for batch processing at end
+        installs = []
+        downgrades = []
+        for pkg_name, versions in packages.iteritems():
+            ver = RpmHelper.newest_rpm_version(versions)
+            pkg = "%s-%s" % (pkg_name, ver) if ver else pkg_name
+            if RpmHelper.rpm_package_installed(pkg):
+                # FIXME:print non-error, but skipping pkg
+                pass
+            elif not RpmHelper.zypper_package_available(pkg):
+                LOG.warn("Skipping package '%s' - unavailable via zypper", pkg)
+            elif not ver:
+                installs.append(pkg)
+            else:
+                current_ver = RpmHelper.rpm_package_version(pkg)
+                rc = RpmHelper.compare_rpm_versions(current_ver, ver)
+                if rc < 0:
+                    installs.append(pkg)
+                elif rc > 0:
+                    downgrades.append(pkg)
+        if installs:
+            RpmHelper.install(installs, rpms=False, zypper=True)
+        if downgrades:
+            RpmHelper.downgrade(downgrades, zypper=True)
 
     def _handle_yum_packages(self, packages):
         """Handle installation, upgrade, or downgrade of packages via yum.
@@ -461,6 +531,7 @@ class PackagesHandler(object):
 
     # map of function pointers to handle different package managers
     _package_handlers = {"yum": _handle_yum_packages,
+                         "zypper": _handle_zypper_packages,
                          "rpm": _handle_rpm_packages,
                          "apt": _handle_apt_packages,
                          "rubygems": _handle_gem_packages,
