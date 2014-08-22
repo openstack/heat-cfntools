@@ -46,6 +46,10 @@ class MockPopenTestCase(testtools.TestCase):
         return subprocess.Popen(
             command, cwd=cwd, env=env, stderr=-1, stdout=-1)
 
+    def mock_unorder_cmd_run(self, command, cwd=None, env=None):
+        return subprocess.Popen(
+            command, cwd=cwd, env=env, stderr=-1, stdout=-1).InAnyOrder()
+
     def setUp(self):
         super(MockPopenTestCase, self).setUp()
         self.m = mox.Mox()
@@ -79,19 +83,20 @@ class TestPackages(MockPopenTestCase):
     def test_yum_install(self):
         install_list = []
         for pack in ('httpd', 'wordpress', 'mysql-server'):
-            self.mock_cmd_run(['su', 'root', '-c',
-                               'rpm -q %s' % pack]).AndReturn(
-                                   FakePOpen(returncode=1))
-            self.mock_cmd_run(
+            self.mock_unorder_cmd_run(
+                ['su', 'root', '-c', 'rpm -q %s' % pack]) \
+                .AndReturn(FakePOpen(returncode=1))
+            self.mock_unorder_cmd_run(
                 ['su', 'root', '-c',
                  'yum -y --showduplicates list available %s' % pack]) \
                 .AndReturn(FakePOpen(returncode=0))
             install_list.append(pack)
 
-        self.mock_cmd_run(
-            ['su', 'root', '-c',
-             'yum -y install %s' % ' '.join(install_list)]) \
-            .AndReturn(FakePOpen(returncode=0))
+        # This mock call corresponding to 'su root -c yum -y install .*'
+        # But there is no way to ignore the order of the parameters, so only
+        # check the return value.
+        self.mock_cmd_run(mox.IgnoreArg()).AndReturn(FakePOpen(
+            returncode=0))
 
         self.m.ReplayAll()
         packages = {
@@ -108,19 +113,20 @@ class TestPackages(MockPopenTestCase):
     def test_zypper_install(self):
         install_list = []
         for pack in ('httpd', 'wordpress', 'mysql-server'):
-            self.mock_cmd_run(['su', 'root', '-c',
-                               'rpm -q %s' % pack]).AndReturn(
-                                   FakePOpen(returncode=1))
-            self.mock_cmd_run(
+            self.mock_unorder_cmd_run(
+                ['su', 'root', '-c', 'rpm -q %s' % pack]) \
+                .AndReturn(FakePOpen(returncode=1))
+            self.mock_unorder_cmd_run(
                 ['su', 'root', '-c',
                  'zypper -n --no-refresh search %s' % pack]) \
                 .AndReturn(FakePOpen(returncode=0))
             install_list.append(pack)
 
-        self.mock_cmd_run(
-            ['su', 'root', '-c',
-             'zypper -n install %s' % ' '.join(install_list)]) \
-            .AndReturn(FakePOpen(returncode=0))
+        # This mock call corresponding to 'su root -c zypper -n install .*'
+        # But there is no way to ignore the order of the parameters, so only
+        # check the return value.
+        self.mock_cmd_run(mox.IgnoreArg()).AndReturn(FakePOpen(
+            returncode=0))
 
         self.m.ReplayAll()
         packages = {
@@ -135,12 +141,12 @@ class TestPackages(MockPopenTestCase):
         self.m.VerifyAll()
 
     def test_apt_install(self):
-        install_list = 'httpd wordpress mysql-server'
-        cmd = 'DEBIAN_FRONTEND=noninteractive apt-get -y install'
-
-        self.mock_cmd_run(['su', 'root', '-c',
-                           '%s %s' % (cmd, install_list)]).AndReturn(
-                               FakePOpen(returncode=0))
+        # This mock call corresponding to
+        # 'DEBIAN_FRONTEND=noninteractive su root -c apt-get -y install .*'
+        # But there is no way to ignore the order of the parameters, so only
+        # check the return value.
+        self.mock_cmd_run(mox.IgnoreArg()).AndReturn(FakePOpen(
+            returncode=0))
         self.m.ReplayAll()
 
         packages = {
@@ -161,51 +167,51 @@ class TestServicesHandler(MockPopenTestCase):
         self.m.StubOutWithMock(os.path, 'exists')
         os.path.exists('/bin/systemctl').MultipleTimes().AndReturn(True)
         # apply_services
-        self.mock_cmd_run(
+        self.mock_unorder_cmd_run(
             ['su', 'root', '-c', '/bin/systemctl enable httpd.service']
         ).AndReturn(FakePOpen())
-        self.mock_cmd_run(
+        self.mock_unorder_cmd_run(
             ['su', 'root', '-c', '/bin/systemctl status httpd.service']
         ).AndReturn(FakePOpen(returncode=-1))
-        self.mock_cmd_run(
+        self.mock_unorder_cmd_run(
             ['su', 'root', '-c', '/bin/systemctl start httpd.service']
         ).AndReturn(FakePOpen())
-        self.mock_cmd_run(
+        self.mock_unorder_cmd_run(
             ['su', 'root', '-c', '/bin/systemctl enable mysqld.service']
         ).AndReturn(FakePOpen())
-        self.mock_cmd_run(
+        self.mock_unorder_cmd_run(
             ['su', 'root', '-c', '/bin/systemctl status mysqld.service']
         ).AndReturn(FakePOpen(returncode=-1))
-        self.mock_cmd_run(
+        self.mock_unorder_cmd_run(
             ['su', 'root', '-c', '/bin/systemctl start mysqld.service']
         ).AndReturn(FakePOpen())
 
         # monitor_services not running
-        self.mock_cmd_run(
+        self.mock_unorder_cmd_run(
             ['su', 'root', '-c', '/bin/systemctl status httpd.service']
         ).AndReturn(FakePOpen(returncode=-1))
-        self.mock_cmd_run(
+        self.mock_unorder_cmd_run(
             ['su', 'root', '-c', '/bin/systemctl start httpd.service']
         ).AndReturn(FakePOpen())
-        self.mock_cmd_run(
+        self.mock_unorder_cmd_run(
             ['su', 'root', '-c', '/bin/services_restarted']
         ).AndReturn(FakePOpen())
-        self.mock_cmd_run(
+        self.mock_unorder_cmd_run(
             ['su', 'root', '-c', '/bin/systemctl status mysqld.service']
         ).AndReturn(FakePOpen(returncode=-1))
-        self.mock_cmd_run(
+        self.mock_unorder_cmd_run(
             ['su', 'root', '-c', '/bin/systemctl start mysqld.service']
         ).AndReturn(FakePOpen())
-        self.mock_cmd_run(
+        self.mock_unorder_cmd_run(
             ['su', 'root', '-c', '/bin/services_restarted']
         ).AndReturn(FakePOpen())
 
         # monitor_services running
-        self.mock_cmd_run(
+        self.mock_unorder_cmd_run(
             ['su', 'root', '-c', '/bin/systemctl status httpd.service']
         ).AndReturn(FakePOpen())
 
-        self.mock_cmd_run(
+        self.mock_unorder_cmd_run(
             ['su', 'root', '-c', '/bin/systemctl status mysqld.service']
         ).AndReturn(FakePOpen())
 
@@ -239,22 +245,22 @@ class TestServicesHandler(MockPopenTestCase):
         self.m.StubOutWithMock(os.path, 'exists')
         os.path.exists('/bin/systemctl').MultipleTimes().AndReturn(True)
         # apply_services
-        self.mock_cmd_run(
+        self.mock_unorder_cmd_run(
             ['su', 'root', '-c', '/bin/systemctl disable httpd.service']
         ).AndReturn(FakePOpen())
-        self.mock_cmd_run(
+        self.mock_unorder_cmd_run(
             ['su', 'root', '-c', '/bin/systemctl status httpd.service']
         ).AndReturn(FakePOpen())
-        self.mock_cmd_run(
+        self.mock_unorder_cmd_run(
             ['su', 'root', '-c', '/bin/systemctl stop httpd.service']
         ).AndReturn(FakePOpen())
-        self.mock_cmd_run(
+        self.mock_unorder_cmd_run(
             ['su', 'root', '-c', '/bin/systemctl disable mysqld.service']
         ).AndReturn(FakePOpen())
-        self.mock_cmd_run(
+        self.mock_unorder_cmd_run(
             ['su', 'root', '-c', '/bin/systemctl status mysqld.service']
         ).AndReturn(FakePOpen())
-        self.mock_cmd_run(
+        self.mock_unorder_cmd_run(
             ['su', 'root', '-c', '/bin/systemctl stop mysqld.service']
         ).AndReturn(FakePOpen())
 
