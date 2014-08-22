@@ -1015,7 +1015,7 @@ class TestMetadataRetrieve(testtools.TestCase):
 
             self.assertEqual(meta_in, meta_out)
 
-    def test_nova_meta_wget(self):
+    def test_nova_meta_curl(self):
         url = 'http://169.254.169.254/openstack/2012-08-10/meta_data.json'
         temp_home = tempfile.mkdtemp()
         cache_path = os.path.join(temp_home, 'meta_data.json')
@@ -1045,7 +1045,7 @@ class TestMetadataRetrieve(testtools.TestCase):
 
         self.m.StubOutWithMock(subprocess, 'Popen')
         subprocess.Popen(['su', 'root', '-c',
-                          'wget -O %s %s' % (cache_path, url)],
+                          'curl -o %s %s' % (cache_path, url)],
                          cwd=None, env=None, stderr=-1, stdout=-1)\
                   .WithSideEffects(write_cache_file)\
                   .AndReturn(FakePOpen('Downloaded', '', 0))
@@ -1057,7 +1057,7 @@ class TestMetadataRetrieve(testtools.TestCase):
         self.assertEqual(meta_in, meta_out)
         self.m.VerifyAll()
 
-    def test_nova_meta_wget_corrupt(self):
+    def test_nova_meta_curl_corrupt(self):
         url = 'http://169.254.169.254/openstack/2012-08-10/meta_data.json'
         temp_home = tempfile.mkdtemp()
         cache_path = os.path.join(temp_home, 'meta_data.json')
@@ -1080,7 +1080,7 @@ class TestMetadataRetrieve(testtools.TestCase):
 
         self.m.StubOutWithMock(subprocess, 'Popen')
         subprocess.Popen(['su', 'root', '-c',
-                          'wget -O %s %s' % (cache_path, url)],
+                          'curl -o %s %s' % (cache_path, url)],
                          cwd=None, env=None, stderr=-1, stdout=-1)\
                   .WithSideEffects(write_cache_file)\
                   .AndReturn(FakePOpen('Downloaded', '', 0))
@@ -1092,7 +1092,7 @@ class TestMetadataRetrieve(testtools.TestCase):
         self.assertEqual(None, meta_out)
         self.m.VerifyAll()
 
-    def test_nova_meta_wget_failed(self):
+    def test_nova_meta_curl_failed(self):
         url = 'http://169.254.169.254/openstack/2012-08-10/meta_data.json'
         temp_home = tempfile.mkdtemp()
         cache_path = os.path.join(temp_home, 'meta_data.json')
@@ -1106,7 +1106,7 @@ class TestMetadataRetrieve(testtools.TestCase):
 
         self.m.StubOutWithMock(subprocess, 'Popen')
         subprocess.Popen(['su', 'root', '-c',
-                          'wget -O %s %s' % (cache_path, url)],
+                          'curl -o %s %s' % (cache_path, url)],
                          cwd=None, env=None, stderr=-1, stdout=-1)\
                   .AndReturn(FakePOpen('Failed', '', 1))
 
@@ -1230,10 +1230,10 @@ class TestSourcesHandler(MockPopenTestCase):
         td = os.path.dirname(end_file)
         self.m.StubOutWithMock(tempfile, 'mkdtemp')
         tempfile.mkdtemp().AndReturn(td)
-        er = "mkdir -p '%s'; cd '%s'; wget -q -O - '%s' | gunzip | tar -xvf -"
+        er = "mkdir -p '%s'; cd '%s'; curl -s '%s' | gunzip | tar -xvf -"
         cmd = ['su', 'root', '-c',
                er % (dest, dest, url)]
-        self.mock_cmd_run(cmd).AndReturn(FakePOpen('Wget good'))
+        self.mock_cmd_run(cmd).AndReturn(FakePOpen('Curl good'))
         self.m.ReplayAll()
         sh = cfn_helper.SourcesHandler(sources)
         sh.apply_sources()
@@ -1254,7 +1254,7 @@ class TestSourcesHandler(MockPopenTestCase):
 
     def test_apply_source_cmd(self):
         sh = cfn_helper.SourcesHandler({})
-        er = "mkdir -p '%s'; cd '%s'; wget -q -O - '%s' | %s | tar -xvf -"
+        er = "mkdir -p '%s'; cd '%s'; curl -s '%s' | %s | tar -xvf -"
         dest = '/tmp'
         # test tgz
         url = 'http://www.example.com/a.tgz'
@@ -1281,7 +1281,7 @@ class TestSourcesHandler(MockPopenTestCase):
         cmd = sh._apply_source_cmd(dest, url)
         self.assertEqual(er % (dest, dest, url, "bunzip2"), cmd)
         # test zip
-        er = "mkdir -p '%s'; cd '%s'; wget -q -O '%s' '%s' && unzip -o '%s'"
+        er = "mkdir -p '%s'; cd '%s'; curl -s -o '%s' '%s' && unzip -o '%s'"
         url = 'http://www.example.com/a.zip'
         d = "/tmp/tmp2I0yNK"
         tmp = "%s/a.zip" % d
@@ -1291,7 +1291,7 @@ class TestSourcesHandler(MockPopenTestCase):
         cmd = sh._apply_source_cmd(dest, url)
         self.assertEqual(er % (dest, dest, tmp, url, tmp), cmd)
         # test gz
-        er = "mkdir -p '%s'; cd '%s'; wget -q -O - '%s' | %s > '%s'"
+        er = "mkdir -p '%s'; cd '%s'; curl -s '%s' | %s > '%s'"
         url = 'http://www.example.com/a.sh.gz'
         cmd = sh._apply_source_cmd(dest, url)
         self.assertEqual(er % (dest, dest, url, "gunzip", "a.sh"), cmd)

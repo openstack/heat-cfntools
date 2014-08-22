@@ -592,7 +592,7 @@ class FilesHandler(object):
                     f.write(json.dumps(meta['content'], indent=4))
                     f.close()
             elif 'source' in meta:
-                CommandRunner('wget -O %s %s' % (dest, meta['source'])).run()
+                CommandRunner('curl -o %s %s' % (dest, meta['source'])).run()
             else:
                 LOG.error('%s %s' % (dest, str(meta)))
                 continue
@@ -671,20 +671,20 @@ class SourcesHandler(object):
         basename = os.path.basename(url)
         stype = self._source_type(url)
         if stype == '.tgz':
-            cmd = "wget -q -O - '%s' | gunzip | tar -xvf -" % url
+            cmd = "curl -s '%s' | gunzip | tar -xvf -" % url
         elif stype == '.tbz2':
-            cmd = "wget -q -O - '%s' | bunzip2 | tar -xvf -" % url
+            cmd = "curl -s '%s' | bunzip2 | tar -xvf -" % url
         elif stype == '.zip':
             tmp = self._url_to_tmp_filename(url)
-            cmd = "wget -q -O '%s' '%s' && unzip -o '%s'" % (tmp, url, tmp)
+            cmd = "curl -s -o '%s' '%s' && unzip -o '%s'" % (tmp, url, tmp)
         elif stype == '.tar':
-            cmd = "wget -q -O - '%s' | tar -xvf -" % url
+            cmd = "curl -s '%s' | tar -xvf -" % url
         elif stype == '.gz':
             (r, ext) = self._splitext(basename)
-            cmd = "wget -q -O - '%s' | gunzip > '%s'" % (url, r)
+            cmd = "curl -s '%s' | gunzip > '%s'" % (url, r)
         elif stype == '.bz2':
             (r, ext) = self._splitext(basename)
-            cmd = "wget -q -O - '%s' | bunzip2 > '%s'" % (url, r)
+            cmd = "curl -s '%s' | bunzip2 > '%s'" % (url, r)
 
         if cmd != '':
             cmd = "mkdir -p '%s'; cd '%s'; %s" % (dest, dest, cmd)
@@ -1149,7 +1149,7 @@ class Metadata(object):
 
         url = 'http://169.254.169.254/openstack/2012-08-10/meta_data.json'
         if not os.path.exists(cache_path):
-            CommandRunner('wget -O %s %s' % (cache_path, url)).run()
+            CommandRunner('curl -o %s %s' % (cache_path, url)).run()
         try:
             with open(cache_path) as fd:
                 try:
