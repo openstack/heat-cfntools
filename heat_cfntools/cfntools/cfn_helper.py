@@ -790,7 +790,6 @@ class ServicesHandler(object):
                 if start_cmd.status != 0:
                     LOG.warning('Service %s did not start. STDERR: %s' %
                                (service, start_cmd.stderr))
-                    return
                 for h in self.hooks:
                     h.event('service.restarted', service, self.resource)
 
