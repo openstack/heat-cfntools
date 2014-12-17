@@ -82,6 +82,9 @@ class TestPackages(MockPopenTestCase):
 
     def test_yum_install(self):
         install_list = []
+        self.mock_unorder_cmd_run(
+            ['su', 'root', '-c', 'which yum']) \
+            .AndReturn(FakePOpen(returncode=0))
         for pack in ('httpd', 'wordpress', 'mysql-server'):
             self.mock_unorder_cmd_run(
                 ['su', 'root', '-c', 'rpm -q %s' % pack]) \
@@ -101,6 +104,71 @@ class TestPackages(MockPopenTestCase):
         self.m.ReplayAll()
         packages = {
             "yum": {
+                "mysql-server": [],
+                "httpd": [],
+                "wordpress": []
+            }
+        }
+
+        cfn_helper.PackagesHandler(packages).apply_packages()
+        self.m.VerifyAll()
+
+    def test_dnf_install_yum_unavailable(self):
+        install_list = []
+        self.mock_unorder_cmd_run(
+            ['su', 'root', '-c', 'which yum']) \
+            .AndReturn(FakePOpen(returncode=1))
+        pkgs = ('httpd', 'mysql-server', 'wordpress')
+        for pack in pkgs:
+            self.mock_unorder_cmd_run(
+                ['su', 'root', '-c', 'rpm -q %s' % pack]) \
+                .AndReturn(FakePOpen(returncode=1))
+            self.mock_unorder_cmd_run(
+                ['su', 'root', '-c',
+                 'dnf -y --showduplicates list available %s' % pack]) \
+                .AndReturn(FakePOpen(returncode=0))
+            install_list.append(pack)
+
+        # This mock call corresponding to 'su root -c dnf -y list upgrades .*'
+        # and 'su root -c dnf -y install .*'
+        # But there is no way to ignore the order of the parameters, so only
+        # check the return value.
+        self.mock_cmd_run(mox.IgnoreArg()).AndReturn(FakePOpen(
+            returncode=0))
+
+        self.m.ReplayAll()
+        packages = {
+            "yum": {
+                "mysql-server": [],
+                "httpd": [],
+                "wordpress": []
+            }
+        }
+
+        cfn_helper.PackagesHandler(packages).apply_packages()
+        self.m.VerifyAll()
+
+    def test_dnf_install(self):
+        install_list = []
+        for pack in ('httpd', 'wordpress', 'mysql-server'):
+            self.mock_unorder_cmd_run(
+                ['su', 'root', '-c', 'rpm -q %s' % pack]) \
+                .AndReturn(FakePOpen(returncode=1))
+            self.mock_unorder_cmd_run(
+                ['su', 'root', '-c',
+                 'dnf -y --showduplicates list available %s' % pack]) \
+                .AndReturn(FakePOpen(returncode=0))
+            install_list.append(pack)
+
+        # This mock call corresponding to 'su root -c dnf -y --best install .*'
+        # But there is no way to ignore the order of the parameters, so only
+        # check the return value.
+        self.mock_cmd_run(mox.IgnoreArg()).AndReturn(FakePOpen(
+            returncode=0))
+
+        self.m.ReplayAll()
+        packages = {
+            "dnf": {
                 "mysql-server": [],
                 "httpd": [],
                 "wordpress": []

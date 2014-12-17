@@ -291,6 +291,20 @@ class RpmHelper(object):
         return command.status == 0
 
     @classmethod
+    def dnf_package_available(cls, pkg):
+        """Indicates whether pkg is available via dnf.
+
+        Arguments:
+            pkg -- A package name (with optional version and release spec).
+                   e.g., httpd
+                   e.g., httpd-2.2.22
+                   e.g., httpd-2.2.22-1.fc21
+        """
+        cmd_str = "dnf -y --showduplicates list available %s" % pkg
+        command = CommandRunner(cmd_str).run()
+        return command.status == 0
+
+    @classmethod
     def zypper_package_available(cls, pkg):
         """Indicates whether pkg is available via zypper.
 
@@ -305,8 +319,8 @@ class RpmHelper(object):
         return command.status == 0
 
     @classmethod
-    def install(cls, packages, rpms=True, zypper=False):
-        """Installs (or upgrades) a set of packages via RPM or via Yum.
+    def install(cls, packages, rpms=True, zypper=False, dnf=False):
+        """Installs (or upgrades) packages via RPM, yum, dnf, or zypper.
 
         Arguments:
             packages -- a list of packages to install
@@ -320,6 +334,11 @@ class RpmHelper(object):
                           - pkg name with version spec (httpd-2.2.22), or
                           - pkg name with version-release spec
                             (httpd-2.2.22-1.fc16)
+            zypper   -- if True:
+                        * overrides use of yum, use zypper instead
+            dnf      -- if True:
+                        * overrides use of yum, use dnf instead
+                        * packages must be in same format as yum pkg list
         """
         if rpms:
             cmd = "rpm -U --force --nosignature "
@@ -327,6 +346,11 @@ class RpmHelper(object):
             LOG.info("Installing packages: %s" % cmd)
         elif zypper:
             cmd = "zypper -n install "
+            cmd += " ".join(packages)
+            LOG.info("Installing packages: %s" % cmd)
+        elif dnf:
+            # use dnf --best to upgrade outdated-but-installed packages
+            cmd = "dnf -y --best install "
             cmd += " ".join(packages)
             LOG.info("Installing packages: %s" % cmd)
         else:
@@ -338,8 +362,8 @@ class RpmHelper(object):
             LOG.warn("Failed to install packages: %s" % cmd)
 
     @classmethod
-    def downgrade(cls, packages, rpms=True, zypper=False):
-        """Downgrades a set of packages via RPM or via Yum.
+    def downgrade(cls, packages, rpms=True, zypper=False, dnf=False):
+        """Downgrades a set of packages via RPM, yum, dnf, or zypper.
 
         Arguments:
             packages -- a list of packages to downgrade
@@ -352,11 +376,20 @@ class RpmHelper(object):
                           - pkg name with version spec (httpd-2.2.22), or
                           - pkg name with version-release spec
                             (httpd-2.2.22-1.fc16)
+            dnf     -- if True:
+                       * Use dnf instead of RPM/yum
         """
         if rpms:
             cls.install(packages)
         elif zypper:
             cmd = "zypper -n install --oldpackage "
+            cmd += " ".join(packages)
+            LOG.info("Downgrading packages: %s", cmd)
+            command = CommandRunner(cmd).run()
+            if command.status:
+                LOG.warn("Failed to downgrade packages: %s" % cmd)
+        elif dnf:
+            cmd = "dnf -y downgrade "
             cmd += " ".join(packages)
             LOG.info("Downgrading packages: %s", cmd)
             command = CommandRunner(cmd).run()
@@ -374,7 +407,7 @@ class RpmHelper(object):
 class PackagesHandler(object):
     _packages = {}
 
-    _package_order = ["dpkg", "rpm", "apt", "yum"]
+    _package_order = ["dpkg", "rpm", "apt", "yum", "dnf"]
 
     @staticmethod
     def _pkgsort(pkg1, pkg2):
@@ -460,6 +493,51 @@ class PackagesHandler(object):
         if downgrades:
             RpmHelper.downgrade(downgrades, zypper=True)
 
+    def _handle_dnf_packages(self, packages):
+        """Handle installation, upgrade, or downgrade of packages via dnf.
+
+        Arguments:
+        packages -- a package entries map of the form:
+                      "pkg_name" : "version",
+                      "pkg_name" : ["v1", "v2"],
+                      "pkg_name" : []
+
+        For each package entry:
+          * if no version is supplied and the package is already installed, do
+            nothing
+          * if no version is supplied and the package is _not_ already
+            installed, install it
+          * if a version string is supplied, and the package is already
+            installed, determine whether to downgrade or upgrade (or do nothing
+            if version matches installed package)
+          * if a version array is supplied, choose the highest version from the
+            array and follow same logic for version string above
+        """
+        # collect pkgs for batch processing at end
+        installs = []
+        downgrades = []
+        for pkg_name, versions in packages.iteritems():
+            ver = RpmHelper.newest_rpm_version(versions)
+            pkg = "%s-%s" % (pkg_name, ver) if ver else pkg_name
+            if RpmHelper.rpm_package_installed(pkg):
+                # FIXME:print non-error, but skipping pkg
+                pass
+            elif not RpmHelper.dnf_package_available(pkg):
+                LOG.warn("Skipping package '%s'. Not available via yum" % pkg)
+            elif not ver:
+                installs.append(pkg)
+            else:
+                current_ver = RpmHelper.rpm_package_version(pkg)
+                rc = RpmHelper.compare_rpm_versions(current_ver, ver)
+                if rc < 0:
+                    installs.append(pkg)
+                elif rc > 0:
+                    downgrades.append(pkg)
+        if installs:
+            RpmHelper.install(installs, rpms=False, dnf=True)
+        if downgrades:
+            RpmHelper.downgrade(downgrades, rpms=False, dnf=True)
+
     def _handle_yum_packages(self, packages):
         """Handle installation, upgrade, or downgrade of packages via yum.
 
@@ -480,6 +558,17 @@ class PackagesHandler(object):
           * if a version array is supplied, choose the highest version from the
             array and follow same logic for version string above
         """
+
+        cmd = CommandRunner("which yum").run()
+        if cmd.status == 1:
+            # yum not available, use DNF if available
+            self._handle_dnf_packages(packages)
+            return
+        elif cmd.status == 127:
+            # `which` command not found
+            LOG.info("`which` not found. Using yum without checking if dnf "
+                     "is available")
+
         # collect pkgs for batch processing at end
         installs = []
         downgrades = []
@@ -531,6 +620,7 @@ class PackagesHandler(object):
 
     # map of function pointers to handle different package managers
     _package_handlers = {"yum": _handle_yum_packages,
+                         "dnf": _handle_dnf_packages,
                          "zypper": _handle_zypper_packages,
                          "rpm": _handle_rpm_packages,
                          "apt": _handle_apt_packages,
@@ -552,6 +642,7 @@ class PackagesHandler(object):
           * rpm
           * apt
           * yum
+          * dnf
         """
         if not self._packages:
             return
