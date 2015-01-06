@@ -633,13 +633,13 @@ class TestHupConfig(MockPopenTestCase):
 
     def test_load_main_section(self):
         fcreds = tempfile.NamedTemporaryFile()
-        fcreds.write('AWSAccessKeyId=foo\nAWSSecretKey=bar\n')
+        fcreds.write('AWSAccessKeyId=foo\nAWSSecretKey=bar\n'.encode('UTF-8'))
         fcreds.flush()
 
         main_conf = tempfile.NamedTemporaryFile()
-        main_conf.write('''[main]
+        main_conf.write(('''[main]
 stack=teststack
-credential-file=%s''' % fcreds.name)
+credential-file=%s''' % fcreds.name).encode('UTF-8'))
         main_conf.flush()
         mainconfig = cfn_helper.HupConfig([open(main_conf.name)])
         self.assertEqual(
@@ -649,11 +649,11 @@ credential-file=%s''' % fcreds.name)
         main_conf.close()
 
         main_conf = tempfile.NamedTemporaryFile()
-        main_conf.write('''[main]
+        main_conf.write(('''[main]
 stack=teststack
 region=region1
 credential-file=%s-invalid
-interval=120''' % fcreds.name)
+interval=120''' % fcreds.name).encode('UTF-8'))
         main_conf.flush()
         e = self.assertRaises(Exception, cfn_helper.HupConfig,
                               [open(main_conf.name)])
@@ -675,9 +675,9 @@ interval=120''' % fcreds.name)
         hooks_conf = tempfile.NamedTemporaryFile()
 
         def write_hook_conf(f, name, triggers, path, action):
-            f.write(
+            f.write((
                 '[%s]\ntriggers=%s\npath=%s\naction=%s\nrunas=root\n\n' % (
-                    name, triggers, path, action))
+                    name, triggers, path, action)).encode('UTF-8'))
 
         write_hook_conf(
             hooks_conf,
@@ -706,15 +706,15 @@ interval=120''' % fcreds.name)
         hooks_conf.flush()
 
         fcreds = tempfile.NamedTemporaryFile()
-        fcreds.write('AWSAccessKeyId=foo\nAWSSecretKey=bar\n')
+        fcreds.write('AWSAccessKeyId=foo\nAWSSecretKey=bar\n'.encode('UTF-8'))
         fcreds.flush()
 
         main_conf = tempfile.NamedTemporaryFile()
-        main_conf.write('''[main]
+        main_conf.write(('''[main]
 stack=teststack
 credential-file=%s
 region=region1
-interval=120''' % fcreds.name)
+interval=120''' % fcreds.name).encode('UTF-8'))
         main_conf.flush()
 
         mainconfig = cfn_helper.HupConfig([
@@ -758,7 +758,7 @@ class TestCfnHelper(testtools.TestCase):
 
     def _check_metadata_content(self, content, value):
         with tempfile.NamedTemporaryFile() as metadata_info:
-            metadata_info.write(content)
+            metadata_info.write(content.encode('UTF-8'))
             metadata_info.flush()
             port = cfn_helper.metadata_server_port(metadata_info.name)
             self.assertEqual(value, port)

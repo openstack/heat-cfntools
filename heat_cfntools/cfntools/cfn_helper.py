@@ -19,8 +19,8 @@ Not implemented yet:
       - placeholders are ignored
 """
 import atexit
-import ConfigParser
 import errno
+import functools
 import grp
 import json
 import logging
@@ -35,6 +35,8 @@ except ImportError:
     rpmutils_present = False
 import re
 import shutil
+import six
+import six.moves.configparser as ConfigParser
 import subprocess
 import tempfile
 
@@ -48,7 +50,7 @@ LOG = logging.getLogger(__name__)
 
 
 def to_boolean(b):
-    val = b.lower().strip() if isinstance(b, basestring) else b
+    val = b.lower().strip() if isinstance(b, six.string_types) else b
     return val in [True, 'true', 'yes', '1', 1]
 
 
@@ -244,7 +246,7 @@ class RpmHelper(object):
                         e.g., ['2.0', '2.2', '2.2-1.fc16', '2.2.22-1.fc16']
         """
         if versions:
-            if isinstance(versions, basestring):
+            if isinstance(versions, six.string_types):
                 return versions
             versions = sorted(versions, rpmutils.compareVerOnly,
                               reverse=True)
@@ -432,7 +434,7 @@ class PackagesHandler(object):
         # -b == local & remote install
         # -y == install deps
         opts = '-b -y'
-        for pkg_name, versions in packages.iteritems():
+        for pkg_name, versions in packages.items():
             if len(versions) > 0:
                 cmd_str = 'gem install %s --version %s %s' % (opts,
                                                               versions[0],
@@ -444,7 +446,7 @@ class PackagesHandler(object):
     def _handle_python_packages(self, packages):
         """very basic support for easy_install."""
         # TODO(asalkeld) support versions
-        for pkg_name, versions in packages.iteritems():
+        for pkg_name, versions in packages.items():
             cmd_str = 'easy_install %s' % (pkg_name)
             CommandRunner(cmd_str).run()
 
@@ -471,7 +473,7 @@ class PackagesHandler(object):
         # collect pkgs for batch processing at end
         installs = []
         downgrades = []
-        for pkg_name, versions in packages.iteritems():
+        for pkg_name, versions in packages.items():
             ver = RpmHelper.newest_rpm_version(versions)
             pkg = "%s-%s" % (pkg_name, ver) if ver else pkg_name
             if RpmHelper.rpm_package_installed(pkg):
@@ -516,7 +518,7 @@ class PackagesHandler(object):
         # collect pkgs for batch processing at end
         installs = []
         downgrades = []
-        for pkg_name, versions in packages.iteritems():
+        for pkg_name, versions in packages.items():
             ver = RpmHelper.newest_rpm_version(versions)
             pkg = "%s-%s" % (pkg_name, ver) if ver else pkg_name
             if RpmHelper.rpm_package_installed(pkg):
@@ -572,7 +574,7 @@ class PackagesHandler(object):
         # collect pkgs for batch processing at end
         installs = []
         downgrades = []
-        for pkg_name, versions in packages.iteritems():
+        for pkg_name, versions in packages.items():
             ver = RpmHelper.newest_rpm_version(versions)
             pkg = "%s-%s" % (pkg_name, ver) if ver else pkg_name
             if RpmHelper.rpm_package_installed(pkg):
@@ -646,7 +648,15 @@ class PackagesHandler(object):
         """
         if not self._packages:
             return
-        packages = sorted(self._packages.iteritems(), PackagesHandler._pkgsort)
+        try:
+            packages = sorted(
+                self._packages.items(), cmp=PackagesHandler._pkgsort)
+        except TypeError:
+            # On Python 3, we have to use key instead of cmp
+            # This could also work on Python 2.7, but not on 2.6
+            packages = sorted(
+                self._packages.items(),
+                key=functools.cmp_to_key(PackagesHandler._pkgsort))
 
         for manager, package_entries in packages:
             handler = self._package_handler(manager)
@@ -663,7 +673,7 @@ class FilesHandler(object):
     def apply_files(self):
         if not self._files:
             return
-        for fdest, meta in self._files.iteritems():
+        for fdest, meta in self._files.items():
             dest = fdest.encode()
             try:
                 os.makedirs(os.path.dirname(dest))
@@ -674,13 +684,14 @@ class FilesHandler(object):
                     LOG.exception(e)
 
             if 'content' in meta:
-                if isinstance(meta['content'], basestring):
+                if isinstance(meta['content'], six.string_types):
                     f = open(dest, 'w+')
                     f.write(meta['content'])
                     f.close()
                 else:
                     f = open(dest, 'w+')
-                    f.write(json.dumps(meta['content'], indent=4))
+                    f.write(json.dumps(meta['content'], indent=4)
+                     .encode('UTF-8'))
                     f.close()
             elif 'source' in meta:
                 CommandRunner('curl -o %s %s' % (dest, meta['source'])).run()
@@ -791,7 +802,7 @@ class SourcesHandler(object):
     def apply_sources(self):
         if not self._sources:
             return
-        for dest, url in self._sources.iteritems():
+        for dest, url in self._sources.items():
             self._apply_source(dest, url)
 
 
@@ -885,11 +896,11 @@ class ServicesHandler(object):
                     h.event('service.restarted', service, self.resource)
 
     def _monitor_services(self, handler, services):
-        for service, properties in services.iteritems():
+        for service, properties in services.items():
             self._monitor_service(handler, service, properties)
 
     def _initialize_services(self, handler, services):
-        for service, properties in services.iteritems():
+        for service, properties in services.items():
             self._initialize_service(handler, service, properties)
 
     # map of function pointers to various service handlers
@@ -908,7 +919,7 @@ class ServicesHandler(object):
         """Starts, stops, enables, disables services."""
         if not self._services:
             return
-        for manager, service_entries in self._services.iteritems():
+        for manager, service_entries in self._services.items():
             handler = self._service_handler(manager)
             if not handler:
                 LOG.warn("Skipping invalid service type: %s" % manager)
@@ -919,7 +930,7 @@ class ServicesHandler(object):
         """Restarts failed services, and runs hooks."""
         if not self._services:
             return
-        for manager, service_entries in self._services.iteritems():
+        for manager, service_entries in self._services.items():
             handler = self._service_handler(manager)
             if not handler:
                 LOG.warn("Skipping invalid service type: %s" % manager)
@@ -1078,7 +1089,7 @@ class GroupsHandler(object):
         """Create Linux/UNIX groups and assign group IDs."""
         if not self.groups:
             return
-        for group, properties in self.groups.iteritems():
+        for group, properties in self.groups.items():
             LOG.debug("%s group is being created" % group)
             self._initialize_group(group, properties)
 
@@ -1122,7 +1133,7 @@ class UsersHandler(object):
         """Create Linux/UNIX users and assign user IDs, groups and homedir."""
         if not self.users:
             return
-        for user, properties in self.users.iteritems():
+        for user, properties in self.users.items():
             LOG.debug("%s user is being created" % user)
             self._initialize_user(user, properties)
 
@@ -1357,7 +1368,7 @@ class Metadata(object):
                                          mode='wb',
                                          delete=False) as cf:
             os.chmod(cf.name, 0o600)
-            cf.write(json.dumps(self._metadata))
+            cf.write(json.dumps(self._metadata).encode('UTF-8'))
             os.rename(cf.name, last_path)
             cf.close()
             if res_last_path != last_path:
