@@ -14,33 +14,17 @@
 # under the License.
 
 import fixtures
-from mox3 import mox
+import mock
 import tempfile
 import testtools
 
 from heat_cfntools.cfntools import cfn_helper
 
 
-class FakeServicesHandler(object):
-    def __init__(self, *args, **kwargs):
-        self.m = mox.Mox()
-        self.m.StubOutWithMock(self, 'monitor_services')
-        self.monitor_services()
-        self.m.ReplayAll()
-
-    def monitor_services(self):
-        raise Exception('Mock not called')
-
-    def __del__(self):
-        self.m.VerifyAll()
-        self.m.UnsetStubs()
-
-
 class TestCfnHup(testtools.TestCase):
 
     def setUp(self):
         super(TestCfnHup, self).setUp()
-        self.m = mox.Mox()
         self.logger = self.useFixture(fixtures.FakeLogger())
         self.stack_name = self.getUniqueString()
         self.resource = self.getUniqueString()
@@ -73,16 +57,17 @@ class TestCfnHup(testtools.TestCase):
         }
 
     def _mock_retrieve_metadata(self, desired_metadata):
-        self.m.StubOutWithMock(self.metadata, 'remote_metadata')
-        self.metadata.remote_metadata().AndReturn(desired_metadata)
-        self.m.ReplayAll()
-
-        with tempfile.NamedTemporaryFile() as last_md:
-            self.metadata.retrieve(last_path=last_md.name)
+        with mock.patch.object(
+                cfn_helper.Metadata, 'remote_metadata') as mock_method:
+            mock_method.return_value = desired_metadata
+            with tempfile.NamedTemporaryFile() as last_md:
+                self.metadata.retrieve(last_path=last_md.name)
 
     def _test_cfn_hup_metadata(self, metadata):
 
         self._mock_retrieve_metadata(metadata)
+        FakeServicesHandler = mock.Mock()
+        FakeServicesHandler.monitor_services.return_value = None
         self.useFixture(
             fixtures.MonkeyPatch(
                 'heat_cfntools.cfntools.cfn_helper.ServicesHandler',
@@ -94,13 +79,10 @@ class TestCfnHup(testtools.TestCase):
         runas = 'root'
         action = '/bin/sh -c "true"'
         hook = cfn_helper.Hook(section, triggers, path, runas, action)
-        self.m.StubOutWithMock(hook, 'event')
-        hook.event('post.update', self.resource, self.resource).AndReturn(None)
-        self.m.ReplayAll()
 
-        self.metadata.cfn_hup([hook])
-        self.m.VerifyAll()
-        self.m.UnsetStubs()
+        with mock.patch.object(cfn_helper.Hook, 'event') as mock_method:
+            mock_method.return_value = None
+            self.metadata.cfn_hup([hook])
 
     def test_cfn_hup_empty_metadata(self):
         self._test_cfn_hup_metadata({})
