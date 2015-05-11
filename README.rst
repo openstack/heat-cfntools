@@ -20,6 +20,10 @@ cfn-signal -
 cfn-hup    -
              Handle updates from the UpdateStack CloudFormation API call
 
+* Free software: Apache license
+* Source: http://git.openstack.org/cgit/openstack/heat-cfntools
+* Bugs: http://bugs.launchpad.net/heat-cfntools
+
 Related projects
 ----------------
 * http://wiki.openstack.org/Heat
