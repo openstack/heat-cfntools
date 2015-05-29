@@ -57,6 +57,9 @@ parser.add_argument('--exit',
                     required=False)
 parser.add_argument('url',
                     help='the url to post to')
+parser.add_argument('-k', '--insecure',
+                    help="This will make insecure https request to cfn-api.",
+                    action='store_true')
 args = parser.parse_args()
 
 log_format = '%(levelname)s [%(asctime)s] %(message)s'
@@ -98,8 +101,12 @@ body = {
     "Data": args.data
 }
 
-cmd_str = "curl -X PUT -H \'Content-Type:\' --data-binary \'%s\' \"%s\"" % \
-    (cfn_helper.json.dumps(body), args.url)
+insecure = ""
+if args.insecure:
+    insecure = "--insecure"
+
+cmd_str = ("curl %s -X PUT -H \'Content-Type:\' --data-binary \'%s\' \"%s\"" %
+           (insecure, cfn_helper.json.dumps(body), args.url))
 command = cfn_helper.CommandRunner(cmd_str).run()
 if command.status != 0:
     LOG.error(command.stderr)
