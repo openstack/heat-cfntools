@@ -31,9 +31,9 @@ parser.add_argument('-c', '--config',
                     required=False,
                     default='/etc/cfn/hooks.d')
 parser.add_argument('-f', '--no-daemon',
-                    dest="no_deamon",
+                    dest="no_daemon",
                     action="store_true",
-                    help="Do not run as a deamon",
+                    help="Do not run as a daemon",
                     required=False)
 parser.add_argument('-v', '--verbose',
                     action="store_true",

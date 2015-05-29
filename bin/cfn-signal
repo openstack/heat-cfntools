@@ -47,7 +47,7 @@ parser.add_argument('-i', '--id',
                     required=False)
 parser.add_argument('-e', '--exit-code',
                     dest="exit_code",
-                    help="The exit code from a procecc to interpret",
+                    help="The exit code from a process to interpret",
                     default=None,
                     required=False)
 parser.add_argument('--exit',
@@ -73,7 +73,7 @@ if args.exit:
 status = 'FAILURE'
 exit_code = args.exit_code or args.exit
 if exit_code:
-    # "exit_code" takes presedence over "success".
+    # "exit_code" takes precedence over "success".
     if exit_code == '0':
         status = 'SUCCESS'
 else:

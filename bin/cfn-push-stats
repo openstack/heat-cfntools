@@ -57,7 +57,7 @@ parser.add_argument('--credential-file', dest="credential_file",
                     help="credential-file", required=False,
                     default='/etc/cfn/cfn-credentials')
 parser.add_argument('--service-failure', required=False, action="store_true",
-                    help='Reports a service falure.')
+                    help='Reports a service failure.')
 parser.add_argument('--mem-util', required=False, action="store_true",
                     help='Reports memory utilization in percentages.')
 parser.add_argument('--mem-used', required=False, action="store_true",
@@ -122,7 +122,7 @@ if args.service_failure:
         'Value': 1,
         'Units': 'Counter'}
 
-# heatbeat
+# heartbeat
 # ========
 if args.heartbeat:
     data['Heartbeat'] = {
@@ -249,7 +249,7 @@ def send_stats(info):
         is_secure=False, port=8003, path="/v1", debug=0)
 
     # Then we send the metric datapoints passed in "info", note this could
-    # contain multiple keys as the options parsed above are noe exclusive
+    # contain multiple keys as the options parsed above are not exclusive
     # The alarm name is passed as a dimension so the metric datapoint can
     # be associated with the alarm/watch in the engine
     metadata = cfn_helper.Metadata('not-used', None)
