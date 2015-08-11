@@ -1129,7 +1129,7 @@ class TestMetadataRetrieve(testtools.TestCase):
         with mock.patch.object(md, 'get_nova_meta') as mock_method:
             mock_method.return_value = md_data
             tags = md.get_tags()
-            mock_method.assert_run_with_once()
+            mock_method.assert_called_once_with()
 
         self.assertEqual(tags_expect, tags)
 
@@ -1147,7 +1147,7 @@ class TestMetadataRetrieve(testtools.TestCase):
         with mock.patch.object(md, 'get_nova_meta') as mock_method:
             mock_method.return_value = md_data
             self.assertEqual(md.get_instance_id(), uuid)
-            mock_method.assert_run_with_once()
+            mock_method.assert_called_once_with()
 
 
 class TestCfnInit(testtools.TestCase):
@@ -1226,21 +1226,33 @@ class TestSourcesHandler(testtools.TestCase):
                 sh = cfn_helper.SourcesHandler(sources)
                 sh.apply_sources()
                 mock_popen.assert_has_calls(calls)
-            mock_mkdtemp.assert_run_with()
+            mock_mkdtemp.assert_called_with()
 
     def test_apply_sources_github(self):
         url = "https://github.com/NoSuchProject/tarball/NoSuchTarball"
-        td = tempfile.mkdtemp()
-        self.addCleanup(os.rmdir, td)
-        end_file = '%s/NoSuchProject-NoSuchTarball.tar.gz' % td
-        self._test_apply_sources(url, end_file)
+        dest = tempfile.mkdtemp()
+        self.addCleanup(os.rmdir, dest)
+        sources = {dest: url}
+        er = "mkdir -p '%s'; cd '%s'; curl -s '%s' | gunzip | tar -xvf -"
+        calls = popen_root_calls([er % (dest, dest, url)])
+        with mock.patch('subprocess.Popen') as mock_popen:
+            mock_popen.return_value = FakePOpen('Curl good')
+            sh = cfn_helper.SourcesHandler(sources)
+            sh.apply_sources()
+            mock_popen.assert_has_calls(calls)
 
     def test_apply_sources_general(self):
         url = "https://website.no.existe/a/b/c/file.tar.gz"
-        td = tempfile.mkdtemp()
-        self.addCleanup(os.rmdir, td)
-        end_file = '%s/file.tar.gz' % td
-        self._test_apply_sources(url, end_file)
+        dest = tempfile.mkdtemp()
+        self.addCleanup(os.rmdir, dest)
+        sources = {dest: url}
+        er = "mkdir -p '%s'; cd '%s'; curl -s '%s' | gunzip | tar -xvf -"
+        calls = popen_root_calls([er % (dest, dest, url)])
+        with mock.patch('subprocess.Popen') as mock_popen:
+            mock_popen.return_value = FakePOpen('Curl good')
+            sh = cfn_helper.SourcesHandler(sources)
+            sh.apply_sources()
+            mock_popen.assert_has_calls(calls)
 
     def test_apply_source_cmd(self):
         sh = cfn_helper.SourcesHandler({})
@@ -1293,4 +1305,4 @@ class TestSourcesHandler(testtools.TestCase):
             url = 'http://www.example.com/a.sh'
             cmd = sh._apply_source_cmd(dest, url)
             self.assertEqual("", cmd)
-            mock_mkdtemp.assert_run_with()
+            mock_mkdtemp.assert_called_with()
