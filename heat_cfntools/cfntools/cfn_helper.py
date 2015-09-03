@@ -180,23 +180,7 @@ class CommandRunner(object):
             self
         """
         LOG.debug("Running command: %s" % self._command)
-
-        cmd = self._command
-        if isinstance(cmd, str):
-            cmd = cmd.split()
-
-        if user != 'root':
-            # lower the privileges
-            try:
-                real = pwd.getpwnam(user)
-                os.setuid(real.pw_uid)
-            except Exception as e:
-                LOG.error("Error setting privileges for user '%s': %s"
-                          % (user, e))
-                # 126: command invoked cannot be executed
-                self._status = 126
-                return
-
+        cmd = ['su', user, '-c', self._command]
         subproc = subprocess.Popen(cmd, stdout=subprocess.PIPE,
                                    stderr=subprocess.PIPE, cwd=cwd, env=env)
         output = subproc.communicate()
@@ -576,6 +560,7 @@ class PackagesHandler(object):
           * if a version array is supplied, choose the highest version from the
             array and follow same logic for version string above
         """
+
         cmd = CommandRunner("which yum").run()
         if cmd.status == 1:
             # yum not available, use DNF if available
