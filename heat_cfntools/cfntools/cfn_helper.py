@@ -1,4 +1,4 @@
-#
+
 #    Licensed under the Apache License, Version 2.0 (the "License"); you may
 #    not use this file except in compliance with the License. You may obtain
 #    a copy of the License at
@@ -19,6 +19,7 @@ Not implemented yet:
       - placeholders are ignored
 """
 import atexit
+import contextlib
 import errno
 import functools
 import grp
@@ -39,6 +40,7 @@ import six
 import six.moves.configparser as ConfigParser
 import subprocess
 import tempfile
+
 
 # Override BOTO_CONFIG, which makes boto look only at the specified
 # config file, instead of the default locations
@@ -152,6 +154,33 @@ class Hook(object):
              self.action)
 
 
+class ControlledPrivilegesFailureException(Exception):
+    pass
+
+
+@contextlib.contextmanager
+def controlled_privileges(user):
+    orig_euid = None
+    try:
+        real = pwd.getpwnam(user)
+        if os.geteuid() != real.pw_uid:
+            orig_euid = os.geteuid()
+            os.seteuid(real.pw_uid)
+            LOG.debug("Privileges set for user %s" % user)
+    except Exception as e:
+        raise ControlledPrivilegesFailureException(e)
+
+    try:
+        yield
+    finally:
+        if orig_euid is not None:
+            try:
+                os.seteuid(orig_euid)
+                LOG.debug("Original privileges restored.")
+            except Exception as e:
+                LOG.error("Error restoring privileges %s" % e)
+
+
 class CommandRunner(object):
     """Helper class to run a command and store the output."""
 
@@ -180,19 +209,34 @@ class CommandRunner(object):
             self
         """
         LOG.debug("Running command: %s" % self._command)
-        cmd = ['su', user, '-c', self._command]
-        subproc = subprocess.Popen(cmd, stdout=subprocess.PIPE,
-                                   stderr=subprocess.PIPE, cwd=cwd, env=env)
-        output = subproc.communicate()
 
-        self._status = subproc.returncode
-        self._stdout = output[0]
-        self._stderr = output[1]
+        cmd = self._command
+
+        # Ensure commands are passed as strings only as we run them
+        # using shell
+        assert isinstance(cmd, six.string_types)
+
+        try:
+            with controlled_privileges(user):
+                subproc = subprocess.Popen(cmd, stdout=subprocess.PIPE,
+                                           stderr=subprocess.PIPE, cwd=cwd,
+                                           env=env, shell=True)
+                output = subproc.communicate()
+                self._status = subproc.returncode
+                self._stdout = output[0]
+                self._stderr = output[1]
+        except ControlledPrivilegesFailureException as e:
+            LOG.error("Error setting privileges for user '%s': %s"
+                      % (user, e))
+            self._status = 126
+            self._stderr = six.text_type(e)
+
         if self._status:
             LOG.debug("Return code of %d after executing: '%s'\n"
                       "stdout: '%s'\n"
                       "stderr: '%s'" % (self._status, cmd, self._stdout,
                                         self._stderr))
+
         if self._next:
             self._next.run()
         return self

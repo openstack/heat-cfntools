@@ -27,9 +27,10 @@ from heat_cfntools.cfntools import cfn_helper
 
 
 def popen_root_calls(calls):
-    kwargs = {'env': None, 'cwd': None, 'stderr': -1, 'stdout': -1}
+    kwargs = {'env': None, 'cwd': None, 'stderr': -1, 'stdout': -1,
+              'shell': True}
     return [
-        mock.call(['su', 'root', '-c', call], **kwargs)
+        mock.call(call, **kwargs)
         for call in calls
     ]
 
@@ -47,13 +48,16 @@ class FakePOpen():
         pass
 
 
+@mock.patch.object(cfn_helper.pwd, 'getpwnam')
+@mock.patch.object(cfn_helper.os, 'seteuid')
+@mock.patch.object(cfn_helper.os, 'geteuid')
 class TestCommandRunner(testtools.TestCase):
 
-    def test_command_runner(self):
+    def test_command_runner(self, mock_geteuid, mock_seteuid, mock_getpwnam):
         def returns(*args, **kwargs):
-            if args[0][3] == '/bin/command1':
+            if args[0] == '/bin/command1':
                 return FakePOpen('All good')
-            elif args[0][3] == '/bin/command2':
+            elif args[0] == '/bin/command2':
                 return FakePOpen('Doing something', 'error', -1)
             else:
                 raise Exception('This should never happen')
@@ -73,13 +77,64 @@ class TestCommandRunner(testtools.TestCase):
             calls = popen_root_calls(['/bin/command1', '/bin/command2'])
             mock_popen.assert_has_calls(calls)
 
+    def test_privileges_are_lowered_for_non_root_user(self, mock_geteuid,
+                                                      mock_seteuid,
+                                                      mock_getpwnam):
+        pw_entry = mock.MagicMock()
+        pw_entry.pw_uid = 1001
+        mock_getpwnam.return_value = pw_entry
+        mock_geteuid.return_value = 0
+        calls = [mock.call(1001), mock.call(0)]
+        with mock.patch('subprocess.Popen') as mock_popen:
+            command = '/bin/command --option=value arg1 arg2'
+            cmd = cfn_helper.CommandRunner(command)
+            cmd.run(user='nonroot')
+            self.assertTrue(mock_geteuid.called)
+            mock_getpwnam.assert_called_once_with('nonroot')
+            mock_seteuid.assert_has_calls(calls)
+            self.assertTrue(mock_popen.called)
 
+    def test_run_returns_when_cannot_set_privileges(self, mock_geteuid,
+                                                    mock_seteuid,
+                                                    mock_getpwnam):
+        msg = '[Error 1] Permission Denied'
+        mock_seteuid.side_effect = Exception(msg)
+        with mock.patch('subprocess.Popen') as mock_popen:
+            command = '/bin/command2'
+            cmd = cfn_helper.CommandRunner(command)
+            cmd.run(user='nonroot')
+            self.assertTrue(mock_getpwnam.called)
+            self.assertTrue(mock_seteuid.called)
+            self.assertFalse(mock_popen.called)
+            self.assertEqual(126, cmd.status)
+            self.assertEqual(msg, cmd.stderr)
+
+    def test_privileges_are_restored_for_command_failure(self, mock_geteuid,
+                                                         mock_seteuid,
+                                                         mock_getpwnam):
+        pw_entry = mock.MagicMock()
+        pw_entry.pw_uid = 1001
+        mock_getpwnam.return_value = pw_entry
+        mock_geteuid.return_value = 0
+        calls = [mock.call(1001), mock.call(0)]
+        with mock.patch('subprocess.Popen') as mock_popen:
+            mock_popen.side_effect = ValueError('Something wrong')
+            command = '/bin/command --option=value arg1 arg2'
+            cmd = cfn_helper.CommandRunner(command)
+            self.assertRaises(ValueError, cmd.run, user='nonroot')
+            self.assertTrue(mock_geteuid.called)
+            mock_getpwnam.assert_called_once_with('nonroot')
+            mock_seteuid.assert_has_calls(calls)
+            self.assertTrue(mock_popen.called)
+
+
+@mock.patch.object(cfn_helper, 'controlled_privileges')
 class TestPackages(testtools.TestCase):
 
-    def test_yum_install(self):
+    def test_yum_install(self, mock_cp):
 
         def returns(*args, **kwargs):
-            if args[0][3].startswith('rpm -q '):
+            if args[0].startswith('rpm -q '):
                 return FakePOpen(returncode=1)
             else:
                 return FakePOpen(returncode=0)
@@ -103,11 +158,11 @@ class TestPackages(testtools.TestCase):
             cfn_helper.PackagesHandler(packages).apply_packages()
             mock_popen.assert_has_calls(calls, any_order=True)
 
-    def test_dnf_install_yum_unavailable(self):
+    def test_dnf_install_yum_unavailable(self, mock_cp):
 
         def returns(*args, **kwargs):
-            if args[0][3].startswith('rpm -q ') \
-               or args[0][3] == 'which yum':
+            if args[0].startswith('rpm -q ') \
+               or args[0] == 'which yum':
                 return FakePOpen(returncode=1)
             else:
                 return FakePOpen(returncode=0)
@@ -131,10 +186,10 @@ class TestPackages(testtools.TestCase):
             cfn_helper.PackagesHandler(packages).apply_packages()
             mock_popen.assert_has_calls(calls, any_order=True)
 
-    def test_dnf_install(self):
+    def test_dnf_install(self, mock_cp):
 
         def returns(*args, **kwargs):
-            if args[0][3].startswith('rpm -q '):
+            if args[0].startswith('rpm -q '):
                 return FakePOpen(returncode=1)
             else:
                 return FakePOpen(returncode=0)
@@ -158,10 +213,10 @@ class TestPackages(testtools.TestCase):
             cfn_helper.PackagesHandler(packages).apply_packages()
             mock_popen.assert_has_calls(calls, any_order=True)
 
-    def test_zypper_install(self):
+    def test_zypper_install(self, mock_cp):
 
         def returns(*args, **kwargs):
-            if args[0][3].startswith('rpm -q '):
+            if args[0].startswith('rpm -q '):
                 return FakePOpen(returncode=1)
             else:
                 return FakePOpen(returncode=0)
@@ -185,7 +240,7 @@ class TestPackages(testtools.TestCase):
             cfn_helper.PackagesHandler(packages).apply_packages()
             mock_popen.assert_has_calls(calls, any_order=True)
 
-    def test_apt_install(self):
+    def test_apt_install(self, mock_cp):
         packages = {
             "apt": {
                 "mysql-server": [],
@@ -200,9 +255,10 @@ class TestPackages(testtools.TestCase):
             self.assertTrue(mock_popen.called)
 
 
+@mock.patch.object(cfn_helper, 'controlled_privileges')
 class TestServicesHandler(testtools.TestCase):
 
-    def test_services_handler_systemd(self):
+    def test_services_handler_systemd(self, mock_cp):
         calls = []
         returns = []
 
@@ -272,7 +328,7 @@ class TestServicesHandler(testtools.TestCase):
                 mock_popen.assert_has_calls(calls, any_order=True)
             mock_exists.assert_called_with('/bin/systemctl')
 
-    def test_services_handler_systemd_disabled(self):
+    def test_services_handler_systemd_disabled(self, mock_cp):
         calls = []
 
         # apply_services
@@ -307,7 +363,7 @@ class TestServicesHandler(testtools.TestCase):
                 mock_popen.assert_has_calls(calls, any_order=True)
             mock_exists.assert_called_with('/bin/systemctl')
 
-    def test_services_handler_sysv_service_chkconfig(self):
+    def test_services_handler_sysv_service_chkconfig(self, mock_cp):
 
         def exists(*args, **kwargs):
             return args[0] != '/bin/systemctl'
@@ -367,7 +423,7 @@ class TestServicesHandler(testtools.TestCase):
             mock_exists.assert_any_call('/sbin/service')
             mock_exists.assert_any_call('/sbin/chkconfig')
 
-    def test_services_handler_sysv_disabled_service_chkconfig(self):
+    def test_services_handler_sysv_disabled_service_chkconfig(self, mock_cp):
         def exists(*args, **kwargs):
             return args[0] != '/bin/systemctl'
 
@@ -405,7 +461,7 @@ class TestServicesHandler(testtools.TestCase):
             mock_exists.assert_any_call('/sbin/service')
             mock_exists.assert_any_call('/sbin/chkconfig')
 
-    def test_services_handler_sysv_systemctl(self):
+    def test_services_handler_sysv_systemctl(self, mock_cp):
         calls = []
         returns = []
 
@@ -459,7 +515,7 @@ class TestServicesHandler(testtools.TestCase):
                 mock_popen.assert_has_calls(calls)
             mock_exists.assert_called_with('/bin/systemctl')
 
-    def test_services_handler_sysv_disabled_systemctl(self):
+    def test_services_handler_sysv_disabled_systemctl(self, mock_cp):
         calls = []
 
         # apply_services
@@ -492,7 +548,7 @@ class TestServicesHandler(testtools.TestCase):
                 mock_popen.assert_has_calls(calls)
             mock_exists.assert_called_with('/bin/systemctl')
 
-    def test_services_handler_sysv_service_updaterc(self):
+    def test_services_handler_sysv_service_updaterc(self, mock_cp):
         calls = []
         returns = []
 
@@ -548,7 +604,7 @@ class TestServicesHandler(testtools.TestCase):
             mock_exists.assert_any_call('/sbin/service')
             mock_exists.assert_any_call('/sbin/chkconfig')
 
-    def test_services_handler_sysv_disabled_service_updaterc(self):
+    def test_services_handler_sysv_disabled_service_updaterc(self, mock_cp):
         calls = []
         returns = []
 
@@ -619,7 +675,8 @@ interval=120''' % fcreds.name).encode('UTF-8'))
         self.assertIn('invalid credentials file', str(e))
         fcreds.close()
 
-    def test_hup_config(self):
+    @mock.patch.object(cfn_helper, 'controlled_privileges')
+    def test_hup_config(self, mock_cp):
         hooks_conf = tempfile.NamedTemporaryFile()
 
         def write_hook_conf(f, name, triggers, path, action):
@@ -1030,7 +1087,8 @@ class TestMetadataRetrieve(testtools.TestCase):
 
             self.assertEqual(meta_in, meta_out)
 
-    def test_nova_meta_curl(self):
+    @mock.patch.object(cfn_helper, 'controlled_privileges')
+    def test_nova_meta_curl(self, mock_cp):
         url = 'http://169.254.169.254/openstack/2012-08-10/meta_data.json'
         temp_home = tempfile.mkdtemp()
         cache_path = os.path.join(temp_home, 'meta_data.json')
@@ -1065,7 +1123,8 @@ class TestMetadataRetrieve(testtools.TestCase):
             mock_popen.assert_has_calls(
                 popen_root_calls(['curl -o %s %s' % (cache_path, url)]))
 
-    def test_nova_meta_curl_corrupt(self):
+    @mock.patch.object(cfn_helper, 'controlled_privileges')
+    def test_nova_meta_curl_corrupt(self, mock_cp):
         url = 'http://169.254.169.254/openstack/2012-08-10/meta_data.json'
         temp_home = tempfile.mkdtemp()
         cache_path = os.path.join(temp_home, 'meta_data.json')
@@ -1093,7 +1152,8 @@ class TestMetadataRetrieve(testtools.TestCase):
             mock_popen.assert_has_calls(
                 popen_root_calls(['curl -o %s %s' % (cache_path, url)]))
 
-    def test_nova_meta_curl_failed(self):
+    @mock.patch.object(cfn_helper, 'controlled_privileges')
+    def test_nova_meta_curl_failed(self, mock_cp):
         url = 'http://169.254.169.254/openstack/2012-08-10/meta_data.json'
         temp_home = tempfile.mkdtemp()
         cache_path = os.path.join(temp_home, 'meta_data.json')
@@ -1169,7 +1229,8 @@ class TestCfnInit(testtools.TestCase):
             md.cfn_init()
             self.assertThat(foo_file.name, ttm.FileContains('bar'))
 
-    def test_cfn_init_with_ignore_errors_false(self):
+    @mock.patch.object(cfn_helper, 'controlled_privileges')
+    def test_cfn_init_with_ignore_errors_false(self, mock_cp):
         md_data = {"AWS::CloudFormation::Init": {"config": {"commands": {
             "00_foo": {"command": "/bin/command1",
                        "ignoreErrors": "false"}}}}}
@@ -1181,7 +1242,8 @@ class TestCfnInit(testtools.TestCase):
             self.assertRaises(cfn_helper.CommandsHandlerRunError, md.cfn_init)
             mock_popen.assert_has_calls(popen_root_calls(['/bin/command1']))
 
-    def test_cfn_init_with_ignore_errors_true(self):
+    @mock.patch.object(cfn_helper, 'controlled_privileges')
+    def test_cfn_init_with_ignore_errors_true(self, mock_cp):
         calls = []
         returns = []
         calls.append('/bin/command1')
@@ -1228,7 +1290,8 @@ class TestSourcesHandler(testtools.TestCase):
                 mock_popen.assert_has_calls(calls)
             mock_mkdtemp.assert_called_with()
 
-    def test_apply_sources_github(self):
+    @mock.patch.object(cfn_helper, 'controlled_privileges')
+    def test_apply_sources_github(self, mock_cp):
         url = "https://github.com/NoSuchProject/tarball/NoSuchTarball"
         dest = tempfile.mkdtemp()
         self.addCleanup(os.rmdir, dest)
@@ -1241,7 +1304,8 @@ class TestSourcesHandler(testtools.TestCase):
             sh.apply_sources()
             mock_popen.assert_has_calls(calls)
 
-    def test_apply_sources_general(self):
+    @mock.patch.object(cfn_helper, 'controlled_privileges')
+    def test_apply_sources_general(self, mock_cp):
         url = "https://website.no.existe/a/b/c/file.tar.gz"
         dest = tempfile.mkdtemp()
         self.addCleanup(os.rmdir, dest)
