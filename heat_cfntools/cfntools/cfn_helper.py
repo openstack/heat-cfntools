@@ -140,7 +140,7 @@ class Hook(object):
     def event(self, ev_name, ev_object, ev_resource):
         if self.resource_name_get() == ev_resource and \
                 ev_name in self.triggers:
-            CommandRunner(self.action).run(user=self.runas)
+            CommandRunner(self.action, shell=True).run(user=self.runas)
         else:
             LOG.debug('event: {%s, %s, %s} did not match %s' %
                       (ev_name, ev_object, ev_resource, self.__str__()))
@@ -184,8 +184,9 @@ def controlled_privileges(user):
 class CommandRunner(object):
     """Helper class to run a command and store the output."""
 
-    def __init__(self, command, nextcommand=None):
+    def __init__(self, command, shell=False, nextcommand=None):
         self._command = command
+        self._shell = shell
         self._next = nextcommand
         self._stdout = None
         self._stderr = None
@@ -211,16 +212,16 @@ class CommandRunner(object):
         LOG.debug("Running command: %s" % self._command)
 
         cmd = self._command
+        shell = self._shell
 
-        # Ensure commands are passed as strings only as we run them
-        # using shell
-        assert isinstance(cmd, six.string_types)
+        # Ensure commands that are given as string are run on shell
+        assert isinstance(cmd, six.string_types) is bool(shell)
 
         try:
             with controlled_privileges(user):
                 subproc = subprocess.Popen(cmd, stdout=subprocess.PIPE,
                                            stderr=subprocess.PIPE, cwd=cwd,
-                                           env=env, shell=True)
+                                           env=env, shell=shell)
                 output = subproc.communicate()
                 self._status = subproc.returncode
                 self._stdout = output[0]
@@ -319,7 +320,8 @@ class RpmHelper(object):
                    e.g., httpd-2.2.22
                    e.g., httpd-2.2.22-1.fc16
         """
-        command = CommandRunner("rpm -q %s" % pkg).run()
+        cmd = ['rpm', '-q', pkg]
+        command = CommandRunner(cmd).run()
         return command.status == 0
 
     @classmethod
@@ -332,8 +334,8 @@ class RpmHelper(object):
                    e.g., httpd-2.2.22
                    e.g., httpd-2.2.22-1.fc16
         """
-        cmd_str = "yum -y --showduplicates list available %s" % pkg
-        command = CommandRunner(cmd_str).run()
+        cmd = ['yum', '-y', '--showduplicates', 'list', 'available', pkg]
+        command = CommandRunner(cmd).run()
         return command.status == 0
 
     @classmethod
@@ -346,8 +348,8 @@ class RpmHelper(object):
                    e.g., httpd-2.2.22
                    e.g., httpd-2.2.22-1.fc21
         """
-        cmd_str = "dnf -y --showduplicates list available %s" % pkg
-        command = CommandRunner(cmd_str).run()
+        cmd = ['dnf', '-y', '--showduplicates', 'list', 'available', pkg]
+        command = CommandRunner(cmd).run()
         return command.status == 0
 
     @classmethod
@@ -360,8 +362,8 @@ class RpmHelper(object):
                    e.g., httpd-2.2.22
                    e.g., httpd-2.2.22-1.fc16
         """
-        cmd_str = "zypper -n --no-refresh search %s" % pkg
-        command = CommandRunner(cmd_str).run()
+        cmd = ['zypper', '-n', '--no-refresh', 'search', pkg]
+        command = CommandRunner(cmd).run()
         return command.status == 0
 
     @classmethod
@@ -387,22 +389,16 @@ class RpmHelper(object):
                         * packages must be in same format as yum pkg list
         """
         if rpms:
-            cmd = "rpm -U --force --nosignature "
-            cmd += " ".join(packages)
-            LOG.info("Installing packages: %s" % cmd)
+            cmd = ['rpm', '-U', '--force', '--nosignature']
         elif zypper:
-            cmd = "zypper -n install "
-            cmd += " ".join(packages)
-            LOG.info("Installing packages: %s" % cmd)
+            cmd = ['zypper', '-n', 'install']
         elif dnf:
             # use dnf --best to upgrade outdated-but-installed packages
-            cmd = "dnf -y --best install "
-            cmd += " ".join(packages)
-            LOG.info("Installing packages: %s" % cmd)
+            cmd = ['dnf', '-y', '--best', 'install']
         else:
-            cmd = "yum -y install "
-            cmd += " ".join(packages)
-            LOG.info("Installing packages: %s" % cmd)
+            cmd = ['yum', '-y', 'install']
+        cmd.extend(packages)
+        LOG.info("Installing packages: %s" % cmd)
         command = CommandRunner(cmd).run()
         if command.status:
             LOG.warn("Failed to install packages: %s" % cmd)
@@ -428,22 +424,22 @@ class RpmHelper(object):
         if rpms:
             cls.install(packages)
         elif zypper:
-            cmd = "zypper -n install --oldpackage "
-            cmd += " ".join(packages)
+            cmd = ['zypper', '-n', 'install', '--oldpackage']
+            cmd.extend(packages)
             LOG.info("Downgrading packages: %s", cmd)
             command = CommandRunner(cmd).run()
             if command.status:
                 LOG.warn("Failed to downgrade packages: %s" % cmd)
         elif dnf:
-            cmd = "dnf -y downgrade "
-            cmd += " ".join(packages)
+            cmd = ['dnf', '-y', 'downgrade']
+            cmd.extend(packages)
             LOG.info("Downgrading packages: %s", cmd)
             command = CommandRunner(cmd).run()
             if command.status:
                 LOG.warn("Failed to downgrade packages: %s" % cmd)
         else:
-            cmd = "yum -y downgrade "
-            cmd += " ".join(packages)
+            cmd = ['yum', '-y', 'downgrade']
+            cmd.extend(packages)
             LOG.info("Downgrading packages: %s" % cmd)
             command = CommandRunner(cmd).run()
             if command.status:
@@ -477,22 +473,23 @@ class PackagesHandler(object):
         # TODO(asalkeld) support versions
         # -b == local & remote install
         # -y == install deps
-        opts = '-b -y'
+        opts = ['-b', '-y']
         for pkg_name, versions in packages.items():
             if len(versions) > 0:
-                cmd_str = 'gem install %s --version %s %s' % (opts,
-                                                              versions[0],
-                                                              pkg_name)
-                CommandRunner(cmd_str).run()
+                cmd = ['gem', 'install'] + opts
+                cmd.extend(['--version', versions[0], pkg_name])
+                CommandRunner(cmd).run()
             else:
-                CommandRunner('gem install %s %s' % (opts, pkg_name)).run()
+                cmd = ['gem', 'install'] + opts
+                cmd.append(pkg_name)
+                CommandRunner(cmd).run()
 
     def _handle_python_packages(self, packages):
         """very basic support for easy_install."""
         # TODO(asalkeld) support versions
         for pkg_name, versions in packages.items():
-            cmd_str = 'easy_install %s' % (pkg_name)
-            CommandRunner(cmd_str).run()
+            cmd = ['easy_install', pkg_name]
+            CommandRunner(cmd).run()
 
     def _handle_zypper_packages(self, packages):
         """Handle installation, upgrade, or downgrade of packages via yum.
@@ -605,7 +602,7 @@ class PackagesHandler(object):
             array and follow same logic for version string above
         """
 
-        cmd = CommandRunner("which yum").run()
+        cmd = CommandRunner(['which', 'yum']).run()
         if cmd.status == 1:
             # yum not available, use DNF if available
             self._handle_dnf_packages(packages)
@@ -658,11 +655,11 @@ class PackagesHandler(object):
     def _handle_apt_packages(self, packages):
         """very basic support for apt."""
         # TODO(asalkeld) support versions
-        pkg_list = ' '.join([p for p in packages])
+        pkg_list = list(packages)
 
-        cmd_str = 'DEBIAN_FRONTEND=noninteractive apt-get -y install %s' % \
-                  pkg_list
-        CommandRunner(cmd_str).run()
+        env = {'DEBIAN_FRONTEND': 'noninteractive'}
+        cmd = ['apt-get', '-y', 'install'] + pkg_list
+        CommandRunner(cmd).run(env=env)
 
     # map of function pointers to handle different package managers
     _package_handlers = {"yum": _handle_yum_packages,
@@ -738,7 +735,7 @@ class FilesHandler(object):
                      .encode('UTF-8'))
                     f.close()
             elif 'source' in meta:
-                CommandRunner('curl -o %s %s' % (dest, meta['source'])).run()
+                CommandRunner(['curl', '-o', dest, meta['source']]).run()
             else:
                 LOG.error('%s %s' % (dest, str(meta)))
                 continue
@@ -839,8 +836,9 @@ class SourcesHandler(object):
 
     def _apply_source(self, dest, url):
         cmd = self._apply_source_cmd(dest, url)
+        #FIXME bug 1498298
         if cmd != '':
-            runner = CommandRunner(cmd)
+            runner = CommandRunner(cmd, shell=True)
             runner.run()
 
     def apply_sources(self):
@@ -862,47 +860,52 @@ class ServicesHandler(object):
         if os.path.exists("/bin/systemctl"):
             service_exe = "/bin/systemctl"
             service = '%s.service' % service
-            service_start = '%s start %s'
-            service_status = '%s status %s'
-            service_stop = '%s stop %s'
+            service_start = [service_exe, 'start', service]
+            service_status = [service_exe, 'status', service]
+            service_stop = [service_exe, 'stop', service]
         elif os.path.exists("/sbin/service"):
             service_exe = "/sbin/service"
-            service_start = '%s %s start'
-            service_status = '%s %s status'
-            service_stop = '%s %s stop'
+            service_start = [service_exe, service, 'start']
+            service_status = [service_exe, service, 'status']
+            service_stop = [service_exe, service, 'stop']
         else:
             service_exe = "/usr/sbin/service"
-            service_start = '%s %s start'
-            service_status = '%s %s status'
-            service_stop = '%s %s stop'
+            service_start = [service_exe, service, 'start']
+            service_status = [service_exe, service, 'status']
+            service_stop = [service_exe, service, 'stop']
 
         if os.path.exists("/bin/systemctl"):
             enable_exe = "/bin/systemctl"
-            enable_on = '%s enable %s'
-            enable_off = '%s disable %s'
+            enable_on = [enable_exe, 'enable', service]
+            enable_off = [enable_exe, 'disable', service]
         elif os.path.exists("/sbin/chkconfig"):
             enable_exe = "/sbin/chkconfig"
-            enable_on = '%s %s on'
-            enable_off = '%s %s off'
+            enable_on = [enable_exe, service, 'on']
+            enable_off = [enable_exe, service, 'off']
+
         else:
             enable_exe = "/usr/sbin/update-rc.d"
-            enable_on = '%s %s enable'
-            enable_off = '%s %s disable'
+            enable_on = [enable_exe, service, 'enable']
+            enable_off = [enable_exe, service, 'disable']
 
-        cmd = ""
+        cmd = None
         if "enable" == command:
-            cmd = enable_on % (enable_exe, service)
+            cmd = enable_on
         elif "disable" == command:
-            cmd = enable_off % (enable_exe, service)
+            cmd = enable_off
         elif "start" == command:
-            cmd = service_start % (service_exe, service)
+            cmd = service_start
         elif "stop" == command:
-            cmd = service_stop % (service_exe, service)
+            cmd = service_stop
         elif "status" == command:
-            cmd = service_status % (service_exe, service)
-        command = CommandRunner(cmd)
-        command.run()
-        return command
+            cmd = service_status
+
+        if cmd is not None:
+            command = CommandRunner(cmd)
+            command.run()
+            return command
+        else:
+            LOG.error("Unknown sysv command %s" % command)
 
     def _initialize_service(self, handler, service, properties):
         if "enabled" in properties:
@@ -1085,7 +1088,7 @@ class CommandsHandler(object):
                 return
 
         if "test" in properties:
-            test = CommandRunner(properties["test"])
+            test = CommandRunner(properties["test"], shell=True)
             test_status = test.run('root', cwd, env).status
             if test_status != 0:
                 LOG.info("%s test returns false, skipping command"
@@ -1097,10 +1100,11 @@ class CommandsHandler(object):
         if "command" in properties:
             try:
                 command = properties["command"]
+                #FIXME bug 1498300
                 if isinstance(command, list):
                     escape = lambda x: '"%s"' % x.replace('"', '\\"')
                     command = ' '.join(map(escape, command))
-                command = CommandRunner(command)
+                command = CommandRunner(command, shell=True)
                 command.run('root', cwd, env)
                 command_status = command.status
             except OSError as e:
@@ -1139,14 +1143,11 @@ class GroupsHandler(object):
 
     def _initialize_group(self, group, properties):
         gid = properties.get("gid", None)
-
-        param_list = []
-        param_list.append(group)
-
+        cmd = ['groupadd', group]
         if gid is not None:
-            param_list.append("--gid " + gid)
+            cmd.extend(['--gid', str(gid)])
 
-        command = CommandRunner("groupadd " + ' '.join(param_list))
+        command = CommandRunner(cmd)
         command.run()
         command_status = command.status
 
@@ -1185,23 +1186,23 @@ class UsersHandler(object):
         uid = properties.get("uid", None)
         homeDir = properties.get("homeDir", None)
 
-        param_list = []
-        param_list.append(user)
+        cmd = ['useradd', user]
 
         if uid is not None:
-            param_list.append("--uid " + uid)
+            cmd.extend(['--uid', six.text_type(uid)])
 
         if homeDir is not None:
-            param_list.append("--home " + homeDir)
+            cmd.extend(['--home', six.text_type(homeDir)])
 
         if "groups" in properties:
-            param_list.append("--groups " + ','.join(properties["groups"]))
+            groups = ','.join(properties["groups"])
+            cmd.extend(['--groups', groups])
 
         #Users are created as non-interactive system users with a shell
         #of /sbin/nologin. This is by design and cannot be modified.
-        param_list.append("--shell /sbin/nologin")
+        cmd.extend(['--shell', '/sbin/nologin'])
 
-        command = CommandRunner("useradd " + ' '.join(param_list))
+        command = CommandRunner(cmd)
         command.run()
         command_status = command.status
 
@@ -1294,7 +1295,8 @@ class Metadata(object):
 
         url = 'http://169.254.169.254/openstack/2012-08-10/meta_data.json'
         if not os.path.exists(cache_path):
-            CommandRunner('curl -o %s %s' % (cache_path, url)).run()
+            cmd = ['curl', '-o', cache_path, url]
+            CommandRunner(cmd).run()
         try:
             with open(cache_path) as fd:
                 try:

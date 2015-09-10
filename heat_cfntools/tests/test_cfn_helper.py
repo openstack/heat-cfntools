@@ -26,9 +26,9 @@ import testtools.matchers as ttm
 from heat_cfntools.cfntools import cfn_helper
 
 
-def popen_root_calls(calls):
+def popen_root_calls(calls, shell=False):
     kwargs = {'env': None, 'cwd': None, 'stderr': -1, 'stdout': -1,
-              'shell': True}
+              'shell': shell}
     return [
         mock.call(call, **kwargs)
         for call in calls
@@ -55,26 +55,28 @@ class TestCommandRunner(testtools.TestCase):
 
     def test_command_runner(self, mock_geteuid, mock_seteuid, mock_getpwnam):
         def returns(*args, **kwargs):
-            if args[0] == '/bin/command1':
+            if args[0][0] == '/bin/command1':
                 return FakePOpen('All good')
-            elif args[0] == '/bin/command2':
+            elif args[0][0] == '/bin/command2':
                 return FakePOpen('Doing something', 'error', -1)
             else:
                 raise Exception('This should never happen')
 
         with mock.patch('subprocess.Popen') as mock_popen:
             mock_popen.side_effect = returns
-            cmd2 = cfn_helper.CommandRunner('/bin/command2')
-            cmd1 = cfn_helper.CommandRunner('/bin/command1', cmd2)
+            cmd2 = cfn_helper.CommandRunner(['/bin/command2'])
+            cmd1 = cfn_helper.CommandRunner(['/bin/command1'],
+                                            nextcommand=cmd2)
             cmd1.run('root')
             self.assertEqual(
-                'CommandRunner:\n\tcommand: /bin/command1\n\tstdout: All good',
+                'CommandRunner:\n\tcommand: [\'/bin/command1\']\n\tstdout: '
+                'All good',
                 str(cmd1))
             self.assertEqual(
-                'CommandRunner:\n\tcommand: /bin/command2\n\tstatus: -1\n'
-                '\tstdout: Doing something\n\tstderr: error',
+                'CommandRunner:\n\tcommand: [\'/bin/command2\']\n\tstatus: '
+                '-1\n\tstdout: Doing something\n\tstderr: error',
                 str(cmd2))
-            calls = popen_root_calls(['/bin/command1', '/bin/command2'])
+            calls = popen_root_calls([['/bin/command1'], ['/bin/command2']])
             mock_popen.assert_has_calls(calls)
 
     def test_privileges_are_lowered_for_non_root_user(self, mock_geteuid,
@@ -86,7 +88,7 @@ class TestCommandRunner(testtools.TestCase):
         mock_geteuid.return_value = 0
         calls = [mock.call(1001), mock.call(0)]
         with mock.patch('subprocess.Popen') as mock_popen:
-            command = '/bin/command --option=value arg1 arg2'
+            command = ['/bin/command', '--option=value', 'arg1', 'arg2']
             cmd = cfn_helper.CommandRunner(command)
             cmd.run(user='nonroot')
             self.assertTrue(mock_geteuid.called)
@@ -100,7 +102,7 @@ class TestCommandRunner(testtools.TestCase):
         msg = '[Error 1] Permission Denied'
         mock_seteuid.side_effect = Exception(msg)
         with mock.patch('subprocess.Popen') as mock_popen:
-            command = '/bin/command2'
+            command = ['/bin/command2']
             cmd = cfn_helper.CommandRunner(command)
             cmd.run(user='nonroot')
             self.assertTrue(mock_getpwnam.called)
@@ -119,7 +121,7 @@ class TestCommandRunner(testtools.TestCase):
         calls = [mock.call(1001), mock.call(0)]
         with mock.patch('subprocess.Popen') as mock_popen:
             mock_popen.side_effect = ValueError('Something wrong')
-            command = '/bin/command --option=value arg1 arg2'
+            command = ['/bin/command', '--option=value', 'arg1', 'arg2']
             cmd = cfn_helper.CommandRunner(command)
             self.assertRaises(ValueError, cmd.run, user='nonroot')
             self.assertTrue(mock_geteuid.called)
@@ -134,15 +136,16 @@ class TestPackages(testtools.TestCase):
     def test_yum_install(self, mock_cp):
 
         def returns(*args, **kwargs):
-            if args[0].startswith('rpm -q '):
+            if args[0][0] == 'rpm' and args[0][1] == '-q':
                 return FakePOpen(returncode=1)
             else:
                 return FakePOpen(returncode=0)
 
-        calls = ['which yum']
+        calls = [['which', 'yum']]
         for pack in ('httpd', 'wordpress', 'mysql-server'):
-            calls.append('rpm -q %s' % pack)
-            calls.append('yum -y --showduplicates list available %s' % pack)
+            calls.append(['rpm', '-q', pack])
+            calls.append(['yum', '-y', '--showduplicates', 'list',
+                          'available', pack])
         calls = popen_root_calls(calls)
 
         packages = {
@@ -161,16 +164,17 @@ class TestPackages(testtools.TestCase):
     def test_dnf_install_yum_unavailable(self, mock_cp):
 
         def returns(*args, **kwargs):
-            if args[0].startswith('rpm -q ') \
-               or args[0] == 'which yum':
+            if ((args[0][0] == 'rpm' and args[0][1] == '-q')
+                    or (args[0][0] == 'which' and args[0][1] == 'yum')):
                 return FakePOpen(returncode=1)
             else:
                 return FakePOpen(returncode=0)
 
-        calls = ['which yum']
+        calls = [['which', 'yum']]
         for pack in ('httpd', 'wordpress', 'mysql-server'):
-            calls.append('rpm -q %s' % pack)
-            calls.append('dnf -y --showduplicates list available %s' % pack)
+            calls.append(['rpm', '-q', pack])
+            calls.append(['dnf', '-y', '--showduplicates', 'list',
+                          'available', pack])
         calls = popen_root_calls(calls)
 
         packages = {
@@ -189,15 +193,16 @@ class TestPackages(testtools.TestCase):
     def test_dnf_install(self, mock_cp):
 
         def returns(*args, **kwargs):
-            if args[0].startswith('rpm -q '):
+            if args[0][0] == 'rpm' and args[0][1] == '-q':
                 return FakePOpen(returncode=1)
             else:
                 return FakePOpen(returncode=0)
 
         calls = []
         for pack in ('httpd', 'wordpress', 'mysql-server'):
-            calls.append('rpm -q %s' % pack)
-            calls.append('dnf -y --showduplicates list available %s' % pack)
+            calls.append(['rpm', '-q', pack])
+            calls.append(['dnf', '-y', '--showduplicates', 'list',
+                          'available', pack])
         calls = popen_root_calls(calls)
 
         packages = {
@@ -216,15 +221,15 @@ class TestPackages(testtools.TestCase):
     def test_zypper_install(self, mock_cp):
 
         def returns(*args, **kwargs):
-            if args[0].startswith('rpm -q '):
+            if args[0][0].startswith('rpm') and args[0][1].startswith('-q'):
                 return FakePOpen(returncode=1)
             else:
                 return FakePOpen(returncode=0)
 
         calls = []
         for pack in ('httpd', 'wordpress', 'mysql-server'):
-            calls.append('rpm -q %s' % pack)
-            calls.append('zypper -n --no-refresh search %s' % pack)
+            calls.append(['rpm', '-q', pack])
+            calls.append(['zypper', '-n', '--no-refresh', 'search', pack])
         calls = popen_root_calls(calls)
 
         packages = {
@@ -263,40 +268,49 @@ class TestServicesHandler(testtools.TestCase):
         returns = []
 
         # apply_services
-        calls.append('/bin/systemctl enable httpd.service')
+        calls.append(['/bin/systemctl', 'enable', 'httpd.service'])
         returns.append(FakePOpen())
-        calls.append('/bin/systemctl status httpd.service')
+        calls.append(['/bin/systemctl', 'status', 'httpd.service'])
         returns.append(FakePOpen(returncode=-1))
-        calls.append('/bin/systemctl start httpd.service')
+        calls.append(['/bin/systemctl', 'start', 'httpd.service'])
         returns.append(FakePOpen())
-        calls.append('/bin/systemctl enable mysqld.service')
+        calls.append(['/bin/systemctl', 'enable', 'mysqld.service'])
         returns.append(FakePOpen())
-        calls.append('/bin/systemctl status mysqld.service')
+        calls.append(['/bin/systemctl', 'status', 'mysqld.service'])
         returns.append(FakePOpen(returncode=-1))
-        calls.append('/bin/systemctl start mysqld.service')
+        calls.append(['/bin/systemctl', 'start', 'mysqld.service'])
         returns.append(FakePOpen())
 
         # monitor_services not running
-        calls.append('/bin/systemctl status httpd.service')
+        calls.append(['/bin/systemctl', 'status', 'httpd.service'])
         returns.append(FakePOpen(returncode=-1))
-        calls.append('/bin/systemctl start httpd.service')
-        returns.append(FakePOpen())
-        calls.append('/bin/services_restarted')
-        returns.append(FakePOpen())
-        calls.append('/bin/systemctl status mysqld.service')
-        returns.append(FakePOpen(returncode=-1))
-        calls.append('/bin/systemctl start mysqld.service')
-        returns.append(FakePOpen())
-        calls.append('/bin/services_restarted')
-        returns.append(FakePOpen())
-
-        # monitor_services running
-        calls.append('/bin/systemctl status httpd.service')
-        returns.append(FakePOpen())
-        calls.append('/bin/systemctl status mysqld.service')
+        calls.append(['/bin/systemctl', 'start', 'httpd.service'])
         returns.append(FakePOpen())
 
         calls = popen_root_calls(calls)
+
+        calls.extend(popen_root_calls(['/bin/services_restarted'], shell=True))
+        returns.append(FakePOpen())
+
+        calls.extend(popen_root_calls([['/bin/systemctl', 'status',
+                                        'mysqld.service']]))
+        returns.append(FakePOpen(returncode=-1))
+        calls.extend(popen_root_calls([['/bin/systemctl', 'start',
+                                        'mysqld.service']]))
+        returns.append(FakePOpen())
+
+        calls.extend(popen_root_calls(['/bin/services_restarted'], shell=True))
+        returns.append(FakePOpen())
+
+        # monitor_services running
+        calls.extend(popen_root_calls([['/bin/systemctl', 'status',
+                                        'httpd.service']]))
+        returns.append(FakePOpen())
+        calls.extend(popen_root_calls([['/bin/systemctl', 'status',
+                                        'mysqld.service']]))
+        returns.append(FakePOpen())
+
+        #calls = popen_root_calls(calls)
 
         services = {
             "systemd": {
@@ -332,12 +346,12 @@ class TestServicesHandler(testtools.TestCase):
         calls = []
 
         # apply_services
-        calls.append('/bin/systemctl disable httpd.service')
-        calls.append('/bin/systemctl status httpd.service')
-        calls.append('/bin/systemctl stop httpd.service')
-        calls.append('/bin/systemctl disable mysqld.service')
-        calls.append('/bin/systemctl status mysqld.service')
-        calls.append('/bin/systemctl stop mysqld.service')
+        calls.append(['/bin/systemctl', 'disable', 'httpd.service'])
+        calls.append(['/bin/systemctl', 'status', 'httpd.service'])
+        calls.append(['/bin/systemctl', 'stop', 'httpd.service'])
+        calls.append(['/bin/systemctl', 'disable', 'mysqld.service'])
+        calls.append(['/bin/systemctl', 'status', 'mysqld.service'])
+        calls.append(['/bin/systemctl', 'stop', 'mysqld.service'])
         calls = popen_root_calls(calls)
 
         services = {
@@ -372,26 +386,27 @@ class TestServicesHandler(testtools.TestCase):
         returns = []
 
         # apply_services
-        calls.append('/sbin/chkconfig httpd on')
+        calls.append(['/sbin/chkconfig', 'httpd', 'on'])
         returns.append(FakePOpen())
-        calls.append('/sbin/service httpd status')
+        calls.append(['/sbin/service', 'httpd', 'status'])
         returns.append(FakePOpen(returncode=-1))
-        calls.append('/sbin/service httpd start')
+        calls.append(['/sbin/service', 'httpd', 'start'])
         returns.append(FakePOpen())
 
         # monitor_services not running
-        calls.append('/sbin/service httpd status')
+        calls.append(['/sbin/service', 'httpd', 'status'])
         returns.append(FakePOpen(returncode=-1))
-        calls.append('/sbin/service httpd start')
-        returns.append(FakePOpen())
-        calls.append('/bin/services_restarted')
-        returns.append(FakePOpen())
-
-        # monitor_services running
-        calls.append('/sbin/service httpd status')
+        calls.append(['/sbin/service', 'httpd', 'start'])
         returns.append(FakePOpen())
 
         calls = popen_root_calls(calls)
+
+        calls.extend(popen_root_calls(['/bin/services_restarted'], shell=True))
+        returns.append(FakePOpen())
+
+        # monitor_services running
+        calls.extend(popen_root_calls([['/sbin/service', 'httpd', 'status']]))
+        returns.append(FakePOpen())
 
         services = {
             "sysvinit": {
@@ -430,9 +445,9 @@ class TestServicesHandler(testtools.TestCase):
         calls = []
 
         # apply_services
-        calls.append('/sbin/chkconfig httpd off')
-        calls.append('/sbin/service httpd status')
-        calls.append('/sbin/service httpd stop')
+        calls.append(['/sbin/chkconfig', 'httpd', 'off'])
+        calls.append(['/sbin/service', 'httpd', 'status'])
+        calls.append(['/sbin/service', 'httpd', 'stop'])
 
         calls = popen_root_calls(calls)
 
@@ -466,26 +481,30 @@ class TestServicesHandler(testtools.TestCase):
         returns = []
 
         # apply_services
-        calls.append('/bin/systemctl enable httpd.service')
+        calls.append(['/bin/systemctl', 'enable', 'httpd.service'])
         returns.append(FakePOpen())
-        calls.append('/bin/systemctl status httpd.service')
+        calls.append(['/bin/systemctl', 'status', 'httpd.service'])
         returns.append(FakePOpen(returncode=-1))
-        calls.append('/bin/systemctl start httpd.service')
+        calls.append(['/bin/systemctl', 'start', 'httpd.service'])
         returns.append(FakePOpen())
 
         # monitor_services not running
-        calls.append('/bin/systemctl status httpd.service')
+        calls.append(['/bin/systemctl', 'status', 'httpd.service'])
         returns.append(FakePOpen(returncode=-1))
-        calls.append('/bin/systemctl start httpd.service')
-        returns.append(FakePOpen())
-        calls.append('/bin/services_restarted')
+        calls.append(['/bin/systemctl', 'start', 'httpd.service'])
         returns.append(FakePOpen())
 
-        # monitor_services running
-        calls.append('/bin/systemctl status httpd.service')
+        shell_calls = []
+        shell_calls.append('/bin/services_restarted')
         returns.append(FakePOpen())
 
         calls = popen_root_calls(calls)
+        calls.extend(popen_root_calls(shell_calls, shell=True))
+
+        # monitor_services running
+        calls.extend(popen_root_calls([['/bin/systemctl', 'status',
+                                        'httpd.service']]))
+        returns.append(FakePOpen())
 
         services = {
             "sysvinit": {
@@ -519,9 +538,9 @@ class TestServicesHandler(testtools.TestCase):
         calls = []
 
         # apply_services
-        calls.append('/bin/systemctl disable httpd.service')
-        calls.append('/bin/systemctl status httpd.service')
-        calls.append('/bin/systemctl stop httpd.service')
+        calls.append(['/bin/systemctl', 'disable', 'httpd.service'])
+        calls.append(['/bin/systemctl', 'status', 'httpd.service'])
+        calls.append(['/bin/systemctl', 'stop', 'httpd.service'])
 
         calls = popen_root_calls(calls)
 
@@ -553,26 +572,30 @@ class TestServicesHandler(testtools.TestCase):
         returns = []
 
         # apply_services
-        calls.append('/usr/sbin/update-rc.d httpd enable')
+        calls.append(['/usr/sbin/update-rc.d', 'httpd', 'enable'])
         returns.append(FakePOpen())
-        calls.append('/usr/sbin/service httpd status')
+        calls.append(['/usr/sbin/service', 'httpd', 'status'])
         returns.append(FakePOpen(returncode=-1))
-        calls.append('/usr/sbin/service httpd start')
+        calls.append(['/usr/sbin/service', 'httpd', 'start'])
         returns.append(FakePOpen())
 
         # monitor_services not running
-        calls.append('/usr/sbin/service httpd status')
+        calls.append(['/usr/sbin/service', 'httpd', 'status'])
         returns.append(FakePOpen(returncode=-1))
-        calls.append('/usr/sbin/service httpd start')
-        returns.append(FakePOpen())
-        calls.append('/bin/services_restarted')
+        calls.append(['/usr/sbin/service', 'httpd', 'start'])
         returns.append(FakePOpen())
 
-        # monitor_services running
-        calls.append('/usr/sbin/service httpd status')
+        shell_calls = []
+        shell_calls.append('/bin/services_restarted')
         returns.append(FakePOpen())
 
         calls = popen_root_calls(calls)
+        calls.extend(popen_root_calls(shell_calls, shell=True))
+
+        # monitor_services running
+        calls.extend(popen_root_calls([['/usr/sbin/service', 'httpd',
+                                        'status']]))
+        returns.append(FakePOpen())
 
         services = {
             "sysvinit": {
@@ -609,11 +632,11 @@ class TestServicesHandler(testtools.TestCase):
         returns = []
 
         # apply_services
-        calls.append('/usr/sbin/update-rc.d httpd disable')
+        calls.append(['/usr/sbin/update-rc.d', 'httpd', 'disable'])
         returns.append(FakePOpen())
-        calls.append('/usr/sbin/service httpd status')
+        calls.append(['/usr/sbin/service', 'httpd', 'status'])
         returns.append(FakePOpen())
-        calls.append('/usr/sbin/service httpd stop')
+        calls.append(['/usr/sbin/service', 'httpd', 'stop'])
         returns.append(FakePOpen())
 
         calls = popen_root_calls(calls)
@@ -751,11 +774,11 @@ interval=120''' % fcreds.name).encode('UTF-8'))
             ' root, /bin/hook3}', str(hooks[3]))
 
         calls = []
-        calls.append('/bin/cfn-http-restarted')
-        calls.append('/bin/hook1')
-        calls.append('/bin/hook2')
-        calls.append('/bin/hook3')
-        calls = popen_root_calls(calls)
+        calls.extend(popen_root_calls(['/bin/cfn-http-restarted'], shell=True))
+        calls.extend(popen_root_calls(['/bin/hook1'], shell=True))
+        calls.extend(popen_root_calls(['/bin/hook2'], shell=True))
+        calls.extend(popen_root_calls(['/bin/hook3'], shell=True))
+        #calls = popen_root_calls(calls)
 
         with mock.patch('subprocess.Popen') as mock_popen:
             mock_popen.return_value = FakePOpen('All good')
@@ -1121,7 +1144,7 @@ class TestMetadataRetrieve(testtools.TestCase):
             meta_out = md.get_nova_meta(cache_path=cache_path)
             self.assertEqual(meta_in, meta_out)
             mock_popen.assert_has_calls(
-                popen_root_calls(['curl -o %s %s' % (cache_path, url)]))
+                popen_root_calls([['curl', '-o', cache_path, url]]))
 
     @mock.patch.object(cfn_helper, 'controlled_privileges')
     def test_nova_meta_curl_corrupt(self, mock_cp):
@@ -1150,7 +1173,7 @@ class TestMetadataRetrieve(testtools.TestCase):
             meta_out = md.get_nova_meta(cache_path=cache_path)
             self.assertEqual(None, meta_out)
             mock_popen.assert_has_calls(
-                popen_root_calls(['curl -o %s %s' % (cache_path, url)]))
+                popen_root_calls([['curl', '-o', cache_path, url]]))
 
     @mock.patch.object(cfn_helper, 'controlled_privileges')
     def test_nova_meta_curl_failed(self, mock_cp):
@@ -1169,7 +1192,7 @@ class TestMetadataRetrieve(testtools.TestCase):
             meta_out = md.get_nova_meta(cache_path=cache_path)
             self.assertEqual(None, meta_out)
             mock_popen.assert_has_calls(
-                popen_root_calls(['curl -o %s %s' % (cache_path, url)]))
+                popen_root_calls([['curl', '-o', cache_path, url]]))
 
     def test_get_tags(self):
         fake_tags = {'foo': 'fee',
@@ -1240,17 +1263,18 @@ class TestCfnInit(testtools.TestCase):
             self.assertTrue(
                 md.retrieve(meta_str=md_data, last_path=self.last_file))
             self.assertRaises(cfn_helper.CommandsHandlerRunError, md.cfn_init)
-            mock_popen.assert_has_calls(popen_root_calls(['/bin/command1']))
+            mock_popen.assert_has_calls(popen_root_calls(['/bin/command1'],
+                                                         shell=True))
 
     @mock.patch.object(cfn_helper, 'controlled_privileges')
     def test_cfn_init_with_ignore_errors_true(self, mock_cp):
         calls = []
         returns = []
-        calls.append('/bin/command1')
+        calls.extend(popen_root_calls(['/bin/command1'], shell=True))
         returns.append(FakePOpen('Doing something', 'error', -1))
-        calls.append('/bin/command2')
+        calls.extend(popen_root_calls(['/bin/command2'], shell=True))
         returns.append(FakePOpen('All good'))
-        calls = popen_root_calls(calls)
+        #calls = popen_root_calls(calls)
 
         md_data = {"AWS::CloudFormation::Init": {"config": {"commands": {
             "00_foo": {"command": "/bin/command1",
@@ -1279,7 +1303,7 @@ class TestSourcesHandler(testtools.TestCase):
         sources = {dest: url}
         td = os.path.dirname(end_file)
         er = "mkdir -p '%s'; cd '%s'; curl -s '%s' | gunzip | tar -xvf -"
-        calls = popen_root_calls([er % (dest, dest, url)])
+        calls = popen_root_calls([er % (dest, dest, url)], shell=True)
 
         with mock.patch.object(tempfile, 'mkdtemp') as mock_mkdtemp:
             mock_mkdtemp.return_value = td
@@ -1297,7 +1321,7 @@ class TestSourcesHandler(testtools.TestCase):
         self.addCleanup(os.rmdir, dest)
         sources = {dest: url}
         er = "mkdir -p '%s'; cd '%s'; curl -s '%s' | gunzip | tar -xvf -"
-        calls = popen_root_calls([er % (dest, dest, url)])
+        calls = popen_root_calls([er % (dest, dest, url)], shell=True)
         with mock.patch('subprocess.Popen') as mock_popen:
             mock_popen.return_value = FakePOpen('Curl good')
             sh = cfn_helper.SourcesHandler(sources)
@@ -1311,7 +1335,7 @@ class TestSourcesHandler(testtools.TestCase):
         self.addCleanup(os.rmdir, dest)
         sources = {dest: url}
         er = "mkdir -p '%s'; cd '%s'; curl -s '%s' | gunzip | tar -xvf -"
-        calls = popen_root_calls([er % (dest, dest, url)])
+        calls = popen_root_calls([er % (dest, dest, url)], shell=True)
         with mock.patch('subprocess.Popen') as mock_popen:
             mock_popen.return_value = FakePOpen('Curl good')
             sh = cfn_helper.SourcesHandler(sources)

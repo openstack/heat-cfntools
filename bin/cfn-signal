@@ -100,14 +100,19 @@ body = {
     "UniqueId": unique_id,
     "Data": args.data
 }
+data = cfn_helper.json.dumps(body)
 
-insecure = ""
+cmd = ['curl']
 if args.insecure:
-    insecure = "--insecure"
+    cmd.append('--insecure')
+cmd.extend([
+    '-X', 'PUT',
+    '-H', 'Content-Type:',
+    '--data-binary', data,
+    args.url
+])
 
-cmd_str = ("curl %s -X PUT -H \'Content-Type:\' --data-binary \'%s\' \"%s\"" %
-           (insecure, cfn_helper.json.dumps(body), args.url))
-command = cfn_helper.CommandRunner(cmd_str).run()
+command = cfn_helper.CommandRunner(cmd).run()
 if command.status != 0:
     LOG.error(command.stderr)
 sys.exit(command.status)
