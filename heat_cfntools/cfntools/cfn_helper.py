@@ -1100,11 +1100,8 @@ class CommandsHandler(object):
         if "command" in properties:
             try:
                 command = properties["command"]
-                #FIXME bug 1498300
-                if isinstance(command, list):
-                    escape = lambda x: '"%s"' % x.replace('"', '\\"')
-                    command = ' '.join(map(escape, command))
-                command = CommandRunner(command, shell=True)
+                shell = isinstance(command, six.string_types)
+                command = CommandRunner(command, shell=shell)
                 command.run('root', cwd, env)
                 command_status = command.status
             except OSError as e:

@@ -1291,6 +1291,30 @@ class TestCfnInit(testtools.TestCase):
             md.cfn_init()
             mock_popen.assert_has_calls(calls)
 
+    @mock.patch.object(cfn_helper, 'controlled_privileges')
+    def test_cfn_init_runs_list_commands_without_shell(self, mock_cp):
+        calls = []
+        returns = []
+        # command supplied as list shouldn't run on shell
+        calls.extend(popen_root_calls([['/bin/command1', 'arg']], shell=False))
+        returns.append(FakePOpen('Doing something'))
+        # command supplied as string should run on shell
+        calls.extend(popen_root_calls(['/bin/command2'], shell=True))
+        returns.append(FakePOpen('All good'))
+
+        md_data = {"AWS::CloudFormation::Init": {"config": {"commands": {
+            "00_foo": {"command": ["/bin/command1", "arg"]},
+            "01_bar": {"command": "/bin/command2"}
+        }}}}
+
+        with mock.patch('subprocess.Popen') as mock_popen:
+            mock_popen.side_effect = returns
+            md = cfn_helper.Metadata('teststack', None)
+            self.assertTrue(
+                md.retrieve(meta_str=md_data, last_path=self.last_file))
+            md.cfn_init()
+            mock_popen.assert_has_calls(calls)
+
 
 class TestSourcesHandler(testtools.TestCase):
     def test_apply_sources_empty(self):
