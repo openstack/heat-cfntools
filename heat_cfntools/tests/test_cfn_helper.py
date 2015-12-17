@@ -823,8 +823,7 @@ class TestCfnHelper(testtools.TestCase):
 
     def test_metadata_server_nofile(self):
         random_filename = self.getUniqueString()
-        self.assertEqual(None,
-                         cfn_helper.metadata_server_port(random_filename))
+        self.assertIsNone(cfn_helper.metadata_server_port(random_filename))
 
     def test_to_boolean(self):
         self.assertTrue(cfn_helper.to_boolean(True))
@@ -1171,7 +1170,7 @@ class TestMetadataRetrieve(testtools.TestCase):
             mock_popen.side_effect = write_cache_file
             md = cfn_helper.Metadata('teststack', None)
             meta_out = md.get_nova_meta(cache_path=cache_path)
-            self.assertEqual(None, meta_out)
+            self.assertIsNone(meta_out)
             mock_popen.assert_has_calls(
                 popen_root_calls([['curl', '-o', cache_path, url]]))
 
@@ -1190,7 +1189,7 @@ class TestMetadataRetrieve(testtools.TestCase):
             mock_popen.return_value = FakePOpen('Failed', '', 1)
             md = cfn_helper.Metadata('teststack', None)
             meta_out = md.get_nova_meta(cache_path=cache_path)
-            self.assertEqual(None, meta_out)
+            self.assertIsNone(meta_out)
             mock_popen.assert_has_calls(
                 popen_root_calls([['curl', '-o', cache_path, url]]))
 
