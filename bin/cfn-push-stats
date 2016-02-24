@@ -29,8 +29,7 @@ from boto.ec2 import cloudwatch
 log_format = '%(levelname)s [%(asctime)s] %(message)s'
 log_file_name = "/var/log/cfn-push-stats.log"
 logging.basicConfig(filename=log_file_name,
-                    format=log_format,
-                    level=logging.DEBUG)
+                    format=log_format)
 LOG = logging.getLogger('cfntools')
 
 try:
@@ -107,6 +106,11 @@ credentials = cfn_helper.parse_creds_file(args.credential_file)
 
 namespace = 'system/linux'
 data = {}
+
+# Logging
+# =======
+if args.verbose:
+    LOG.setLevel(logging.DEBUG)
 
 # Generic user-specified metric
 # =============================
