@@ -35,8 +35,8 @@ LOG = logging.getLogger('cfntools')
 try:
     import psutil
 except ImportError:
-    LOG.warn("psutil not available. If you want process and memory "
-             "statistics, you need to install it.")
+    LOG.warning("psutil not available. If you want process and memory "
+                "statistics, you need to install it.")
 
 from heat_cfntools.cfntools import cfn_helper
 

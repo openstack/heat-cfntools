@@ -401,7 +401,7 @@ class RpmHelper(object):
         LOG.info("Installing packages: %s" % cmd)
         command = CommandRunner(cmd).run()
         if command.status:
-            LOG.warn("Failed to install packages: %s" % cmd)
+            LOG.warning("Failed to install packages: %s" % cmd)
 
     @classmethod
     def downgrade(cls, packages, rpms=True, zypper=False, dnf=False):
@@ -429,21 +429,21 @@ class RpmHelper(object):
             LOG.info("Downgrading packages: %s", cmd)
             command = CommandRunner(cmd).run()
             if command.status:
-                LOG.warn("Failed to downgrade packages: %s" % cmd)
+                LOG.warning("Failed to downgrade packages: %s" % cmd)
         elif dnf:
             cmd = ['dnf', '-y', 'downgrade']
             cmd.extend(packages)
             LOG.info("Downgrading packages: %s", cmd)
             command = CommandRunner(cmd).run()
             if command.status:
-                LOG.warn("Failed to downgrade packages: %s" % cmd)
+                LOG.warning("Failed to downgrade packages: %s" % cmd)
         else:
             cmd = ['yum', '-y', 'downgrade']
             cmd.extend(packages)
             LOG.info("Downgrading packages: %s" % cmd)
             command = CommandRunner(cmd).run()
             if command.status:
-                LOG.warn("Failed to downgrade packages: %s" % cmd)
+                LOG.warning("Failed to downgrade packages: %s" % cmd)
 
 
 class PackagesHandler(object):
@@ -521,7 +521,8 @@ class PackagesHandler(object):
                 # FIXME:print non-error, but skipping pkg
                 pass
             elif not RpmHelper.zypper_package_available(pkg):
-                LOG.warn("Skipping package '%s' - unavailable via zypper", pkg)
+                LOG.warning(
+                    "Skipping package '%s' - unavailable via zypper", pkg)
             elif not ver:
                 installs.append(pkg)
             else:
@@ -566,7 +567,8 @@ class PackagesHandler(object):
                 # FIXME:print non-error, but skipping pkg
                 pass
             elif not RpmHelper.dnf_package_available(pkg):
-                LOG.warn("Skipping package '%s'. Not available via yum" % pkg)
+                LOG.warning(
+                    "Skipping package '%s'. Not available via yum" % pkg)
             elif not ver:
                 installs.append(pkg)
             else:
@@ -622,7 +624,8 @@ class PackagesHandler(object):
                 # FIXME:print non-error, but skipping pkg
                 pass
             elif not RpmHelper.yum_package_available(pkg):
-                LOG.warn("Skipping package '%s'. Not available via yum" % pkg)
+                LOG.warning(
+                    "Skipping package '%s'. Not available via yum" % pkg)
             elif not ver:
                 installs.append(pkg)
             else:
@@ -702,7 +705,7 @@ class PackagesHandler(object):
         for manager, package_entries in packages:
             handler = self._package_handler(manager)
             if not handler:
-                LOG.warn("Skipping invalid package type: %s" % manager)
+                LOG.warning("Skipping invalid package type: %s" % manager)
             else:
                 handler(self, package_entries)
 
@@ -934,7 +937,7 @@ class ServicesHandler(object):
             command = handler(self, service, "status")
             running = command.status == 0
             if ensure_running and not running:
-                LOG.warn("Restarting service %s" % service)
+                LOG.warning("Restarting service %s" % service)
                 start_cmd = handler(self, service, "start")
                 if start_cmd.status != 0:
                     LOG.warning('Service %s did not start. STDERR: %s' %
@@ -969,7 +972,7 @@ class ServicesHandler(object):
         for manager, service_entries in self._services.items():
             handler = self._service_handler(manager)
             if not handler:
-                LOG.warn("Skipping invalid service type: %s" % manager)
+                LOG.warning("Skipping invalid service type: %s" % manager)
             else:
                 self._initialize_services(handler, service_entries)
 
@@ -980,7 +983,7 @@ class ServicesHandler(object):
         for manager, service_entries in self._services.items():
             handler = self._service_handler(manager)
             if not handler:
-                LOG.warn("Skipping invalid service type: %s" % manager)
+                LOG.warning("Skipping invalid service type: %s" % manager)
             else:
                 self._monitor_services(handler, service_entries)
 
@@ -1343,7 +1346,8 @@ class Metadata(object):
             try:
                 self._data = self.remote_metadata()
             except MetadataServerConnectionError as ex:
-                LOG.warn("Unable to retrieve remote metadata : %s" % str(ex))
+                LOG.warning(
+                    "Unable to retrieve remote metadata : %s" % str(ex))
 
                 # If reading remote metadata fails, we fall-back on local files
                 # in order to get the most up-to-date version, we try:
@@ -1360,8 +1364,8 @@ class Metadata(object):
                     try:
                         fd = open(filepath)
                     except IOError:
-                        LOG.warn("Unable to open local metadata : %s" %
-                                 filepath)
+                        LOG.warning("Unable to open local metadata : %s" %
+                                    filepath)
                         continue
                     else:
                         LOG.info("Opened local metadata %s" % filepath)
@@ -1389,8 +1393,8 @@ class Metadata(object):
                         pass
                     lm.close()
             except IOError:
-                LOG.warn("Unable to open local metadata : %s" %
-                         metadata_file)
+                LOG.warning("Unable to open local metadata : %s" %
+                            metadata_file)
                 continue
 
         if self._metadata != last_data:
@@ -1402,8 +1406,8 @@ class Metadata(object):
             try:
                 os.makedirs(cache_dir, mode=0o700)
             except IOError as e:
-                LOG.warn('could not create metadata cache dir %s [%s]' %
-                         (cache_dir, e))
+                LOG.warning('could not create metadata cache dir %s [%s]' %
+                            (cache_dir, e))
                 return
         # save current metadata to file
         tmp_dir = os.path.dirname(last_path)
