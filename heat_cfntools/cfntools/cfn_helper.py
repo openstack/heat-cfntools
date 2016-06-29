@@ -1154,19 +1154,19 @@ class GroupsHandler(object):
         if command_status == 0:
             LOG.info("%s has been successfully created" % group)
         elif command_status == 9:
-            LOG.error("An error occured creating %s group : " %
+            LOG.error("An error occurred creating %s group : " %
                       group + "group name not unique")
         elif command_status == 4:
-            LOG.error("An error occured creating %s group : " %
+            LOG.error("An error occurred creating %s group : " %
                       group + "GID not unique")
         elif command_status == 3:
-            LOG.error("An error occured creating %s group : " %
+            LOG.error("An error occurred creating %s group : " %
                       group + "GID not valid")
         elif command_status == 2:
-            LOG.error("An error occured creating %s group : " %
+            LOG.error("An error occurred creating %s group : " %
                       group + "Invalid syntax")
         else:
-            LOG.error("An error occured creating %s group" % group)
+            LOG.error("An error occurred creating %s group" % group)
 
 
 class UsersHandler(object):
@@ -1209,22 +1209,22 @@ class UsersHandler(object):
         if command_status == 0:
             LOG.info("%s has been successfully created" % user)
         elif command_status == 9:
-            LOG.error("An error occured creating %s user : " %
+            LOG.error("An error occurred creating %s user : " %
                       user + "user name not unique")
         elif command_status == 6:
-            LOG.error("An error occured creating %s user : " %
+            LOG.error("An error occurred creating %s user : " %
                       user + "group does not exist")
         elif command_status == 4:
-            LOG.error("An error occured creating %s user : " %
+            LOG.error("An error occurred creating %s user : " %
                       user + "UID not unique")
         elif command_status == 3:
-            LOG.error("An error occured creating %s user : " %
+            LOG.error("An error occurred creating %s user : " %
                       user + "Invalid argument")
         elif command_status == 2:
-            LOG.error("An error occured creating %s user : " %
+            LOG.error("An error occurred creating %s user : " %
                       user + "Invalid syntax")
         else:
-            LOG.error("An error occured creating %s user" % user)
+            LOG.error("An error occurred creating %s user" % user)
 
 
 class MetadataServerConnectionError(Exception):
@@ -1256,7 +1256,7 @@ class Metadata(object):
         self._has_changed = False
 
     def remote_metadata(self):
-        """Connect to the metadata server and retreive the metadata."""
+        """Connect to the metadata server and retrieve the metadata."""
 
         if self.credentials_file:
             credentials = parse_creds_file(self.credentials_file)
