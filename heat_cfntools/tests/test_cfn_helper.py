@@ -82,7 +82,7 @@ class TestCommandRunner(testtools.TestCase):
     def test_privileges_are_lowered_for_non_root_user(self, mock_geteuid,
                                                       mock_seteuid,
                                                       mock_getpwnam):
-        pw_entry = mock.MagicMock()
+        pw_entry = mock.Mock()
         pw_entry.pw_uid = 1001
         mock_getpwnam.return_value = pw_entry
         mock_geteuid.return_value = 0
@@ -114,7 +114,7 @@ class TestCommandRunner(testtools.TestCase):
     def test_privileges_are_restored_for_command_failure(self, mock_geteuid,
                                                          mock_seteuid,
                                                          mock_getpwnam):
-        pw_entry = mock.MagicMock()
+        pw_entry = mock.Mock()
         pw_entry.pw_uid = 1001
         mock_getpwnam.return_value = pw_entry
         mock_geteuid.return_value = 0
