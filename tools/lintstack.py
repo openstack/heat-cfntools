@@ -170,7 +170,7 @@ def validate(newmsg=None):
                 print json.dumps(i)
             print "Consider regenerating the exception file if you will."
     else:
-        print ("Please fix the errors above. If you believe they are false"
+        print("Please fix the errors above. If you believe they are false"
               " positives, run 'tools/lintstack.py generate' to overwrite.")
         sys.exit(1)
 
