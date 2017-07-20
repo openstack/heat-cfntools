@@ -7,7 +7,7 @@ Heat cfntools
 -------------
 
 .. toctree::
-   :maxdepth: 2
+   :maxdepth: 1
 
    cfn-create-aws-symlinks
    cfn-get-metadata
