@@ -13,9 +13,10 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
+import tempfile
+
 import fixtures
 import mock
-import tempfile
 import testtools
 
 from heat_cfntools.cfntools import cfn_helper

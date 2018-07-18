@@ -14,12 +14,13 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
-import boto.cloudformation as cfn
-import fixtures
 import json
-import mock
 import os
 import tempfile
+
+import boto.cloudformation as cfn
+import fixtures
+import mock
 import testtools
 import testtools.matchers as ttm
 
@@ -35,7 +36,7 @@ def popen_root_calls(calls, shell=False):
     ]
 
 
-class FakePOpen():
+class FakePOpen(object):
     def __init__(self, stdout='', stderr='', returncode=0):
         self.returncode = returncode
         self.stdout = stdout
@@ -309,8 +310,6 @@ class TestServicesHandler(testtools.TestCase):
         calls.extend(popen_root_calls([['/bin/systemctl', 'status',
                                         'mysqld.service']]))
         returns.append(FakePOpen())
-
-        #calls = popen_root_calls(calls)
 
         services = {
             "systemd": {
@@ -693,7 +692,8 @@ region=region1
 credential-file=%s-invalid
 interval=120''' % fcreds.name).encode('UTF-8'))
         main_conf.flush()
-        e = self.assertRaises(Exception, cfn_helper.HupConfig,
+        e = self.assertRaises(cfn_helper.InvalidCredentialsException,
+                              cfn_helper.HupConfig,
                               [open(main_conf.name)])
         self.assertIn('invalid credentials file', str(e))
         fcreds.close()
@@ -778,7 +778,6 @@ interval=120''' % fcreds.name).encode('UTF-8'))
         calls.extend(popen_root_calls(['/bin/hook1'], shell=True))
         calls.extend(popen_root_calls(['/bin/hook2'], shell=True))
         calls.extend(popen_root_calls(['/bin/hook3'], shell=True))
-        #calls = popen_root_calls(calls)
 
         with mock.patch('subprocess.Popen') as mock_popen:
             mock_popen.return_value = FakePOpen('All good')
@@ -1273,7 +1272,6 @@ class TestCfnInit(testtools.TestCase):
         returns.append(FakePOpen('Doing something', 'error', -1))
         calls.extend(popen_root_calls(['/bin/command2'], shell=True))
         returns.append(FakePOpen('All good'))
-        #calls = popen_root_calls(calls)
 
         md_data = {"AWS::CloudFormation::Init": {"config": {"commands": {
             "00_foo": {"command": "/bin/command1",

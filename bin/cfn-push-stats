@@ -23,7 +23,7 @@ import subprocess
 # Override BOTO_CONFIG, which makes boto look only at the specified
 # config file, instead of the default locations
 os.environ['BOTO_CONFIG'] = '/var/lib/heat-cfntools/cfn-boto-cfg'
-from boto.ec2 import cloudwatch
+from boto.ec2 import cloudwatch  # noqa
 
 
 log_format = '%(levelname)s [%(asctime)s] %(message)s'
@@ -38,7 +38,7 @@ except ImportError:
     LOG.warning("psutil not available. If you want process and memory "
                 "statistics, you need to install it.")
 
-from heat_cfntools.cfntools import cfn_helper
+from heat_cfntools.cfntools import cfn_helper  # noqa
 
 KILO = 1024
 MEGA = 1048576

@@ -36,16 +36,17 @@ except ImportError:
     rpmutils_present = False
 import re
 import shutil
-import six
-import six.moves.configparser as ConfigParser
 import subprocess
 import tempfile
+
+import six
+import six.moves.configparser as ConfigParser
 
 
 # Override BOTO_CONFIG, which makes boto look only at the specified
 # config file, instead of the default locations
 os.environ['BOTO_CONFIG'] = '/var/lib/heat-cfntools/cfn-boto-cfg'
-from boto import cloudformation
+from boto import cloudformation  # noqa
 
 
 LOG = logging.getLogger(__name__)
@@ -70,6 +71,12 @@ def parse_creds_file(path='/etc/cfn/cfn-credentials'):
             if match:
                 creds[key] = match.group(1)
     return creds
+
+
+class InvalidCredentialsException(Exception):
+    def __init__(self, credential_file):
+        super(Exception, self).__init__("invalid credentials file %s" %
+                                        credential_file)
 
 
 class HupConfig(object):
@@ -98,8 +105,7 @@ class HupConfig(object):
             with open(self.credential_file) as f:
                 self.credentials = f.read()
         except Exception:
-            raise Exception("invalid credentials file %s" %
-                            self.credential_file)
+            raise InvalidCredentialsException(self.credential_file)
 
         # optional values
         try:
@@ -113,8 +119,8 @@ class HupConfig(object):
             self.interval = 10
 
     def __str__(self):
-        return '{stack: %s, credential_file: %s, region: %s, interval:%d}' % \
-            (self.stack, self.credential_file, self.region, self.interval)
+        return ('{stack: %s, credential_file: %s, region: %s, interval:%d}' %
+                (self.stack, self.credential_file, self.region, self.interval))
 
     def unique_resources_get(self):
         resources = []
@@ -138,20 +144,19 @@ class Hook(object):
         return sp[1]
 
     def event(self, ev_name, ev_object, ev_resource):
-        if self.resource_name_get() == ev_resource and \
-                ev_name in self.triggers:
+        if (self.resource_name_get() == ev_resource and
+                ev_name in self.triggers):
             CommandRunner(self.action, shell=True).run(user=self.runas)
         else:
             LOG.debug('event: {%s, %s, %s} did not match %s' %
                       (ev_name, ev_object, ev_resource, self.__str__()))
 
     def __str__(self):
-        return '{%s, %s, %s, %s, %s}' % \
-            (self.name,
-             self.triggers,
-             self.path,
-             self.runas,
-             self.action)
+        return '{%s, %s, %s, %s, %s}' % (self.name,
+                                         self.triggers,
+                                         self.path,
+                                         self.runas,
+                                         self.action)
 
 
 class ControlledPrivilegesFailureException(Exception):
@@ -656,7 +661,7 @@ class PackagesHandler(object):
           * if a different version of the package is installed, overwrite it
           * if the package isn't installed, install it
         """
-        #FIXME: handle rpm installs
+        # FIXME(asalkeld): handle rpm installs
         pass
 
     def _handle_apt_packages(self, packages):
@@ -738,8 +743,8 @@ class FilesHandler(object):
                     f.close()
                 else:
                     f = open(dest, 'w+')
-                    f.write(json.dumps(meta['content'], indent=4)
-                     .encode('UTF-8'))
+                    f.write(json.dumps(meta['content'],
+                                       indent=4).encode('UTF-8'))
                     f.close()
             elif 'source' in meta:
                 CommandRunner(['curl', '-o', dest, meta['source']]).run()
@@ -843,7 +848,7 @@ class SourcesHandler(object):
 
     def _apply_source(self, dest, url):
         cmd = self._apply_source_cmd(dest, url)
-        #FIXME bug 1498298
+        # FIXME bug 1498298
         if cmd != '':
             runner = CommandRunner(cmd, shell=True)
             runner.run()
@@ -945,7 +950,7 @@ class ServicesHandler(object):
                 start_cmd = handler(self, service, "start")
                 if start_cmd.status != 0:
                     LOG.warning('Service %s did not start. STDERR: %s' %
-                               (service, start_cmd.stderr))
+                                (service, start_cmd.stderr))
                 for h in self.hooks:
                     h.event('service.restarted', service, self.resource)
 
@@ -1124,8 +1129,8 @@ class CommandsHandler(object):
         if command_status == 0:
             LOG.info("%s has been successfully executed" % command_label)
         else:
-            if "ignoreErrors" in properties and \
-               to_boolean(properties["ignoreErrors"]):
+            if ("ignoreErrors" in properties and
+                    to_boolean(properties["ignoreErrors"])):
                 LOG.info("%s has failed (status=%d). Explicit ignoring"
                          % (command_label, command_status))
             else:
@@ -1202,8 +1207,8 @@ class UsersHandler(object):
             groups = ','.join(properties["groups"])
             cmd.extend(['--groups', groups])
 
-        #Users are created as non-interactive system users with a shell
-        #of /sbin/nologin. This is by design and cannot be modified.
+        # Users are created as non-interactive system users with a shell
+        # of /sbin/nologin. This is by design and cannot be modified.
         cmd.extend(['--shell', '/sbin/nologin'])
 
         command = CommandRunner(cmd)
@@ -1431,9 +1436,10 @@ class Metadata(object):
         return json.dumps(self._metadata)
 
     def display(self, key=None):
-        """Print the metadata to the standard output stream. By default the
-        full metadata is displayed but the ouptut can be limited to a specific
-        with the <key> argument.
+        """Print the metadata to the standard output stream.
+
+        By default the full metadata is displayed but the ouptut can be limited
+        to a specific with the <key> argument.
 
         Arguments:
             key -- the metadata's key to display, nested keys can be specified
@@ -1475,9 +1481,9 @@ class Metadata(object):
 
     def _is_valid_metadata(self):
         """Should find the AWS::CloudFormation::Init json key."""
-        is_valid = self._metadata and \
-            self._init_key in self._metadata and \
-            self._metadata[self._init_key]
+        is_valid = (self._metadata and
+                    self._init_key in self._metadata and
+                    self._metadata[self._init_key])
         if is_valid:
             self._metadata = self._metadata[self._init_key]
         return is_valid
