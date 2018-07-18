@@ -457,13 +457,17 @@ class PackagesHandler(object):
         p1_name = pkg1[0]
         p2_name = pkg2[0]
         if p1_name in order and p2_name in order:
-            return cmp(order.index(p1_name), order.index(p2_name))
+            i1 = order.index(p1_name)
+            i2 = order.index(p2_name)
+            return (i1 > i2) - (i1 < i2)
         elif p1_name in order:
             return -1
         elif p2_name in order:
             return 1
         else:
-            return cmp(p1_name.lower(), p2_name.lower())
+            n1 = p1_name.lower()
+            n2 = p2_name.lower()
+            return (n1 > n2) - (n1 < n2)
 
     def __init__(self, packages):
         self._packages = packages
