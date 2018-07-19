@@ -3,7 +3,7 @@
 build
 dist
 heat_cfntools.egg-info/
-.testrepository/
+.stestr/
 subunit.log
 .tox
 AUTHORS

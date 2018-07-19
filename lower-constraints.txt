@@ -4,5 +4,5 @@ mock==1.0
 pbr==0.8
 psutil==1.1.1
 six==1.9.0
-testrepository==0.0.18
+stestr==2.0.0
 testtools==0.9.34
