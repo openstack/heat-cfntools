@@ -3,6 +3,7 @@
       - check-requirements
       - publish-openstack-docs-pti
       - openstack-python35-jobs
+      - openstack-python36-jobs
       - openstack-python-jobs
       - publish-to-pypi
     check:
