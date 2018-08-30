@@ -115,8 +115,8 @@ html_theme = 'openstackdocs'
 
 # -- Options for openstackdocstheme --------------------------------------
 repository_name = 'openstack/heat-cfntools'
-bug_project = 'heat-cfntools'
-bug_tag = ''
+bug_project = '991'
+bug_tag = 'docs'
 
 # -- Options for HTMLHelp output ------------------------------------------
 
