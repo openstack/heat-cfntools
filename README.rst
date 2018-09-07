@@ -31,7 +31,7 @@ cfn-hup    -
 
 * Free software: Apache license
 * Source: http://git.openstack.org/cgit/openstack/heat-cfntools
-* Bugs: http://bugs.launchpad.net/heat-cfntools
+* Bugs: https://storyboard.openstack.org/#!/project/openstack/heat-cfntools
 
 Related projects
 ----------------
