@@ -30,9 +30,9 @@ cfn-hup    -
              Handle updates from the UpdateStack CloudFormation API call
 
 * Free software: Apache license
-* Source: http://git.openstack.org/cgit/openstack/heat-cfntools
+* Source: https://opendev.org/openstack/heat-cfntools/
 * Bugs: https://storyboard.openstack.org/#!/project/openstack/heat-cfntools
 
 Related projects
 ----------------
-* http://wiki.openstack.org/Heat
+* https://wiki.openstack.org/Heat
