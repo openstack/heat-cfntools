@@ -17,10 +17,10 @@
 import json
 import os
 import tempfile
+from unittest import mock
 
 import boto.cloudformation as cfn
 import fixtures
-import mock
 import testtools
 import testtools.matchers as ttm
 

@@ -14,9 +14,9 @@
 # under the License.
 
 import tempfile
+from unittest import mock
 
 import fixtures
-import mock
 import testtools
 
 from heat_cfntools.cfntools import cfn_helper
