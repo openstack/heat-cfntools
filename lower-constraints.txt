@@ -1,5 +1,4 @@
 boto==2.32.1
-hacking==0.9.0
 mock==1.0
 pbr==2.0.0
 psutil==1.1.1
