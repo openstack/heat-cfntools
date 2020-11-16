@@ -311,7 +311,7 @@ class RpmHelper(object):
         Arguments:
             pkg -- A package name
         """
-        cmd = "rpm -q --queryformat '%{VERSION}-%{RELEASE}' %s" % pkg
+        cmd = "rpm -q --queryformat '%%{VERSION}-%%{RELEASE}' %s" % pkg
         command = CommandRunner(cmd).run()
         return command.stdout
 
