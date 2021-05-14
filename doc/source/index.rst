@@ -15,3 +15,13 @@ Heat cfntools
    cfn-init
    cfn-push-stats
    cfn-signal
+
+For Contributors
+----------------
+
+* If you are a new contributor to Heat cfntools please refer: :doc:`contributor/contributing`
+
+  .. toctree::
+     :hidden:
+
+     contributor/contributing
