@@ -1,3 +1,7 @@
+# Requirements lower bounds listed here are our best effort to keep them up to
+# date but we do not test them so no guarantee of having them all correct. If
+# you find any incorrect lower bounds, let us know or propose a fix.
+
 pbr!=2.1.0,>=2.0.0
 boto>=2.32.1
 psutil>=1.1.1

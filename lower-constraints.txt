@@ -1,6 +1,0 @@
-boto==2.32.1
-pbr==2.0.0
-psutil==1.1.1
-six==1.9.0
-stestr==2.0.0
-testtools==0.9.34
