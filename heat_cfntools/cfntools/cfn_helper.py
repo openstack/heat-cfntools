@@ -19,6 +19,7 @@ Not implemented yet:
       - placeholders are ignored
 """
 import atexit
+import configparser
 import contextlib
 import errno
 import functools
@@ -39,9 +40,6 @@ import shutil
 import subprocess
 import tempfile
 
-import six
-import six.moves.configparser as ConfigParser
-
 
 # Override BOTO_CONFIG, which makes boto look only at the specified
 # config file, instead of the default locations
@@ -53,7 +51,7 @@ LOG = logging.getLogger(__name__)
 
 
 def to_boolean(b):
-    val = b.lower().strip() if isinstance(b, six.string_types) else b
+    val = b.lower().strip() if isinstance(b, str) else b
     return val in [True, 'true', 'yes', '1', 1]
 
 
@@ -81,7 +79,7 @@ class InvalidCredentialsException(Exception):
 
 class HupConfig(object):
     def __init__(self, fp_list):
-        self.config = ConfigParser.ConfigParser()
+        self.config = configparser.ConfigParser()
         for fp in fp_list:
             self.config.read_file(fp)
 
@@ -110,12 +108,12 @@ class HupConfig(object):
         # optional values
         try:
             self.region = self.config.get('main', 'region')
-        except ConfigParser.NoOptionError:
+        except configparser.NoOptionError:
             self.region = 'nova'
 
         try:
             self.interval = self.config.getint('main', 'interval')
-        except ConfigParser.NoOptionError:
+        except configparser.NoOptionError:
             self.interval = 10
 
     def __str__(self):
@@ -220,7 +218,7 @@ class CommandRunner(object):
         shell = self._shell
 
         # Ensure commands that are given as string are run on shell
-        assert isinstance(cmd, six.string_types) is bool(shell)
+        assert isinstance(cmd, str) is bool(shell)
 
         try:
             with controlled_privileges(user):
@@ -235,7 +233,7 @@ class CommandRunner(object):
             LOG.error("Error setting privileges for user '%s': %s"
                       % (user, e))
             self._status = 126
-            self._stderr = six.text_type(e)
+            self._stderr = str(e)
 
         if self._status:
             LOG.debug("Return code of %d after executing: '%s'\n"
@@ -296,7 +294,7 @@ class RpmHelper(object):
                         e.g., ['2.0', '2.2', '2.2-1.fc16', '2.2.22-1.fc16']
         """
         if versions:
-            if isinstance(versions, six.string_types):
+            if isinstance(versions, str):
                 return versions
             versions = sorted(versions, rpmutils.compareVerOnly,
                               reverse=True)
@@ -737,7 +735,7 @@ class FilesHandler(object):
                     LOG.exception(e)
 
             if 'content' in meta:
-                if isinstance(meta['content'], six.string_types):
+                if isinstance(meta['content'], str):
                     f = open(dest, 'w+')
                     f.write(meta['content'])
                     f.close()
@@ -1112,7 +1110,7 @@ class CommandsHandler(object):
         if "command" in properties:
             try:
                 command = properties["command"]
-                shell = isinstance(command, six.string_types)
+                shell = isinstance(command, str)
                 command = CommandRunner(command, shell=shell)
                 command.run('root', cwd, env)
                 command_status = command.status
@@ -1198,10 +1196,10 @@ class UsersHandler(object):
         cmd = ['useradd', user]
 
         if uid is not None:
-            cmd.extend(['--uid', six.text_type(uid)])
+            cmd.extend(['--uid', str(uid)])
 
         if homeDir is not None:
-            cmd.extend(['--home', six.text_type(homeDir)])
+            cmd.extend(['--home', str(homeDir)])
 
         if "groups" in properties:
             groups = ','.join(properties["groups"])
