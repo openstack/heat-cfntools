@@ -83,7 +83,7 @@ class HupConfig(object):
     def __init__(self, fp_list):
         self.config = ConfigParser.SafeConfigParser()
         for fp in fp_list:
-            self.config.readfp(fp)
+            self.config.read_file(fp)
 
         self.load_main_section()
 
