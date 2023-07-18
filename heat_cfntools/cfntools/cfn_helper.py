@@ -81,7 +81,7 @@ class InvalidCredentialsException(Exception):
 
 class HupConfig(object):
     def __init__(self, fp_list):
-        self.config = ConfigParser.SafeConfigParser()
+        self.config = ConfigParser.ConfigParser()
         for fp in fp_list:
             self.config.read_file(fp)
 
