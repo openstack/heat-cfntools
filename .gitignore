@@ -6,5 +6,7 @@ heat_cfntools.egg-info/
 .stestr/
 subunit.log
 .tox
+.coverage
+.coverage.*
 AUTHORS
 ChangeLog
