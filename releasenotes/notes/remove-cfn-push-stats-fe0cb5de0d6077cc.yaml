@@ -1,0 +1,5 @@
+---
+upgrade:
+  - |
+    The ``cfn-push-stats`` tool has been removed. This tools required
+    the CloudWatch API of heat, which was already removed.
